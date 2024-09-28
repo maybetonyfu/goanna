@@ -77,10 +77,10 @@ var functionTemplate2 = NewTemplate("fun2", `
 	{{ if ne (len .Arguments) 0 }}
 		Zeta = [{{ joinStr .Arguments "" "," }} | _],
 	{{ end }}
-	{{ if ne (len .TypeVars) 0 }}
+	{{- if ne (len .TypeVars) 0 -}}
 		Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}],
-	{{ end }}
-	{{ joinStr .RuleBody "" ","}}.`)
+	{{- end }}
+	{{ joinStr .RuleBody "" ",\n        "}}.`)
 
 var mainTemplate = NewTemplate("main", `
 main(G) :-
@@ -99,8 +99,7 @@ main(G) :-
           _{{.}},
     {{ end -}}
     true
-    ],
-    write_canonical(G).`)
+    ].`)
 
 func TemplateToString(tmpl *template.Template, data interface{}) string {
 	var buf bytes.Buffer
@@ -179,14 +178,14 @@ type Inventory struct {
 func NewInventory(input Input) *Inventory {
 	tyingRules := make(map[string][]Rule)
 	for _, rule := range input.Rules {
-		if rule.Head.Name == "type" {
+		if rule.Head.Type == "type" {
 			tyingRules[rule.Head.Name] = append(tyingRules[rule.Head.Name], rule)
 		}
 	}
 
 	instanceRules := make(map[string]map[int][]string)
 	for _, rule := range input.Rules {
-		if rule.Head.Name == "instance" {
+		if rule.Head.Type == "instance" {
 			instanceRules[rule.Head.Name][rule.Head.Id] = append(instanceRules[rule.Head.Name][rule.Head.Id], rule.Body)
 		}
 	}
