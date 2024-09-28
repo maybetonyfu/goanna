@@ -3,9 +3,17 @@ package marco
 import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
+	"mil/graph"
 )
 
 type IntSet mapset.Set[int]
+
+type Error struct {
+	MCSs          []IntSet
+	MSSs          []IntSet
+	MUSs          []IntSet
+	CriticalNodes []int
+}
 
 func NewIntSet(vals ...int) IntSet {
 	return IntSet(mapset.NewSet[int](vals...))
@@ -99,28 +107,99 @@ func (m *Marco) Run() {
 	}
 }
 
-func TestMarco() {
-	satFunc := func(rules []int) bool {
-		solver := NewGiniSolver(NewIntSet(1, 2))
-		allProls := [][]int{
-			{1},
-			{-1},
-			{2},
-			{-2},
-			{1, 2},
+func combinations(input []int) [][]int {
+	var results [][]int
+	for i := 0; i < len(input); i++ {
+		for j := i + 1; j < len(input); j++ {
+			results = append(results, []int{input[i], input[j]})
 		}
-		for _, rule := range rules {
-			solver.AddClause(NewIntSet(allProls[rule-1]...))
-		}
-		return solver.Solve()
 	}
-	mc := NewMarco([]int{1, 2, 3, 4, 5}, satFunc)
-	mc.Run()
-	for _, mus := range mc.MUSs {
-		fmt.Println("MUS: ", mus)
+	return results
+}
+
+func (m *Marco) Analysis() []Error {
+	// Populate MCS List
+	for _, mss := range m.MSSs {
+		m.MCSs = append(m.MCSs, m.Rules.Difference(mss))
 	}
 
-	for _, mss := range mc.MSSs {
-		fmt.Println("MSS: ", mss)
+	musIndexList := make([]int, len(m.MUSs))
+	for i := range musIndexList {
+		musIndexList[i] = i
 	}
+
+	musGraph := graph.NewGraph(len(musIndexList))
+	for _, combination := range combinations(musIndexList) {
+		index1 := combination[0]
+		mus1 := m.MUSs[index1]
+
+		index2 := combination[1]
+		mus2 := m.MUSs[index2]
+
+		if !mus1.Intersect(mus2).IsEmpty() {
+			musGraph.AddEdge(index1, index2)
+		}
+	}
+
+	_, components := musGraph.CountAndGetConnectedComponents()
+
+	errors := make([]Error, len(components))
+	for i, component := range components {
+		musList := make([]IntSet, 0)
+		mssList := make([]IntSet, 0)
+		mcsList := make([]IntSet, 0)
+		for musId := range component {
+			musList = append(musList, m.MUSs[musId])
+		}
+		criticalNodes := NewIntSet()
+		for _, mus := range musList {
+			criticalNodes = criticalNodes.Union(mus)
+		}
+		mcsSet := mapset.NewSet[IntSet]()
+		for _, mcs := range m.MCSs {
+			reduced := mcs.Intersect(criticalNodes)
+			if reduced.IsEmpty() {
+				continue
+			}
+			mcsSet.Add(reduced)
+		}
+		mcsList = mcsSet.ToSlice()
+		for _, mcs := range mcsList {
+			mssList = append(mssList, criticalNodes.Difference(mcs))
+		}
+		errors[i] = Error{
+			MCSs:          mcsList,
+			MSSs:          mssList,
+			MUSs:          musList,
+			CriticalNodes: criticalNodes.ToSlice(),
+		}
+	}
+	return errors
+}
+
+func TestMarco() {
+	fmt.Println(combinations([]int{1, 2, 3, 4, 5, 6}))
+	//satFunc := func(rules []int) bool {
+	//	solver := NewGiniSolver(NewIntSet(1, 2))
+	//	allProls := [][]int{
+	//		{1},
+	//		{-1},
+	//		{2},
+	//		{-2},
+	//		{1, 2},
+	//	}
+	//	for _, rule := range rules {
+	//		solver.AddClause(NewIntSet(allProls[rule-1]...))
+	//	}
+	//	return solver.Solve()
+	//}
+	//mc := NewMarco([]int{1, 2, 3, 4, 5}, satFunc)
+	//mc.Run()
+	//for _, mus := range mc.MUSs {
+	//	fmt.Println("MUS: ", mus)
+	//}
+	//
+	//for _, mss := range mc.MSSs {
+	//	fmt.Println("MSS: ", mss)
+	//}
 }
