@@ -287,7 +287,7 @@ func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
 		capturedNodes := make([]int, 0)
 		ownArguments := inv.Arguments[name]
 		owenTypeVars := make([]string, 0)
-		for varName, _ := range inv.TypeVars[name] {
+		for varName := range inv.TypeVars[name] {
 			owenTypeVars = append(owenTypeVars, varName)
 		}
 		for _, rule := range ownTypingRule {
@@ -327,7 +327,7 @@ func (inv *Inventory) RenderProlog() string {
 }
 
 func (inv *Inventory) Satisfiable(rules []int) bool {
-	typingRules := inv.RenderTypingRules(inv.EffectiveRules, inv.EffectiveRules)
+	typingRules := inv.RenderTypingRules(rules, nil)
 	classRules := inv.RenderClassRules()
 	typeCheckPredicate := inv.RenderTypeChecking()
 	parts := []string{
