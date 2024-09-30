@@ -1,3 +1,5 @@
+github.com/crillab/gophersat v1.4.0 h1:irf9ajKmNnEURjgPU4oz+ouqIXXLQ59ZNd3NC+hULMc=
+github.com/crillab/gophersat v1.4.0/go.mod h1:gDzeMEBrqJR20IL9JW25tFHNGLU5+GDeJzr0zpi3mxs=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deckarep/golang-set/v2 v2.6.0 h1:XfcQbWM1LlMB8BsJ8N9vW5ehnnPVIw0je80NsVHagjM=

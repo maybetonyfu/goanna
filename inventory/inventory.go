@@ -326,6 +326,34 @@ func (inv *Inventory) RenderProlog() string {
 	return strings.Join(parts, "\n")
 }
 
+func (inv *Inventory) AxiomCheck() bool {
+	typingRules := inv.RenderTypingRules(inv.AxiomaticRules, nil)
+	classRules := inv.RenderClassRules()
+	typeCheckPredicate := inv.RenderTypeChecking()
+	parts := []string{
+		preamble,
+		strings.Join(typingRules, "\n"),
+		strings.Join(classRules, "\n"),
+		typeCheckPredicate,
+	}
+	program := strings.Join(parts, "\n")
+	return inv.logic.ConsultAndCheck(program, "type_check.")
+}
+
+func (inv *Inventory) TypeCheck() bool {
+	typingRules := inv.RenderTypingRules(inv.EffectiveRules, nil)
+	classRules := inv.RenderClassRules()
+	typeCheckPredicate := inv.RenderTypeChecking()
+	parts := []string{
+		preamble,
+		strings.Join(typingRules, "\n"),
+		strings.Join(classRules, "\n"),
+		typeCheckPredicate,
+	}
+	program := strings.Join(parts, "\n")
+	return inv.logic.ConsultAndCheck(program, "type_check.")
+}
+
 func (inv *Inventory) Satisfiable(rules []int) bool {
 	typingRules := inv.RenderTypingRules(rules, nil)
 	classRules := inv.RenderClassRules()
@@ -337,5 +365,5 @@ func (inv *Inventory) Satisfiable(rules []int) bool {
 		typeCheckPredicate,
 	}
 	program := strings.Join(parts, "\n")
-	return inv.logic.ConsultAndCheck(program, "type_check")
+	return inv.logic.ConsultAndCheck(program, "type_check.")
 }

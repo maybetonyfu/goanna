@@ -7,3 +7,5 @@ require (
 	github.com/ichiban/prolog v1.2.1
 	github.com/irifrance/gini v1.0.1
 )
+
+require github.com/crillab/gophersat v1.4.0 // indirect

@@ -36,10 +36,10 @@ func NewMarco(rules []int, satFunc func([]int) bool) *Marco {
 		MUSs:        []IntSet{},
 		MCSs:        []IntSet{},
 		MSSs:        []IntSet{},
-		MaxLoop:     10,
+		MaxLoop:     1000,
 		LoopCounter: 0,
 		SatFunc:     satFunc,
-		Solver:      NewGiniSolver(NewIntSet(rules...)),
+		Solver:      NewMaxsatSolver(NewIntSet(rules...)),
 	}
 	return &marco
 }
@@ -127,7 +127,7 @@ func (m *Marco) Analysis() []Error {
 	for i := range musIndexList {
 		musIndexList[i] = i
 	}
-
+	fmt.Printf("%v\n", m.MUSs)
 	musGraph := graph.NewGraph(len(musIndexList))
 	for _, combination := range combinations(musIndexList) {
 		index1 := combination[0]
@@ -142,64 +142,78 @@ func (m *Marco) Analysis() []Error {
 	}
 
 	_, components := musGraph.CountAndGetConnectedComponents()
+	fmt.Printf("Components: \n %v\n", components)
 
-	errors := make([]Error, len(components))
+	errors := make([]Error, 0)
 	for i, component := range components {
+		fmt.Println(`Disconnected component `, i, component)
 		musList := make([]IntSet, 0)
 		mssList := make([]IntSet, 0)
 		mcsList := make([]IntSet, 0)
-		for musId := range component {
+		for _, musId := range component {
+			fmt.Println(`Disconnected component `, i, musId)
+
 			musList = append(musList, m.MUSs[musId])
 		}
+		fmt.Println(`Disconnected component `, i, musList)
+
 		criticalNodes := NewIntSet()
 		for _, mus := range musList {
 			criticalNodes = criticalNodes.Union(mus)
 		}
-		mcsSet := mapset.NewSet[IntSet]()
 		for _, mcs := range m.MCSs {
 			reduced := mcs.Intersect(criticalNodes)
 			if reduced.IsEmpty() {
 				continue
 			}
-			mcsSet.Add(reduced)
+			exist := false
+			for _, included := range mcsList {
+				if reduced.Equal(included) {
+					exist = true
+					break
+				}
+			}
+			if !exist {
+				mcsList = append(mcsList, reduced)
+			}
 		}
-		mcsList = mcsSet.ToSlice()
+
 		for _, mcs := range mcsList {
 			mssList = append(mssList, criticalNodes.Difference(mcs))
 		}
-		errors[i] = Error{
+
+		errors = append(errors, Error{
 			MCSs:          mcsList,
 			MSSs:          mssList,
 			MUSs:          musList,
 			CriticalNodes: criticalNodes.ToSlice(),
-		}
+		})
 	}
 	return errors
 }
 
 func TestMarco() {
-	fmt.Println(combinations([]int{1, 2, 3, 4, 5, 6}))
-	//satFunc := func(rules []int) bool {
-	//	solver := NewGiniSolver(NewIntSet(1, 2))
-	//	allProls := [][]int{
-	//		{1},
-	//		{-1},
-	//		{2},
-	//		{-2},
-	//		{1, 2},
-	//	}
-	//	for _, rule := range rules {
-	//		solver.AddClause(NewIntSet(allProls[rule-1]...))
-	//	}
-	//	return solver.Solve()
-	//}
-	//mc := NewMarco([]int{1, 2, 3, 4, 5}, satFunc)
-	//mc.Run()
-	//for _, mus := range mc.MUSs {
-	//	fmt.Println("MUS: ", mus)
-	//}
-	//
-	//for _, mss := range mc.MSSs {
-	//	fmt.Println("MSS: ", mss)
-	//}
+	satFunc := func(rules []int) bool {
+		solver := NewGiniSolver(NewIntSet(1, 2))
+		allProls := [][]int{
+			{1},
+			{-1},
+			{2},
+			{-2},
+			{1, 2},
+		}
+		for _, rule := range rules {
+			solver.AddClause(NewIntSet(allProls[rule-1]...))
+		}
+		return solver.Solve()
+	}
+	mc := NewMarco([]int{1, 2, 3, 4, 5}, satFunc)
+	mc.Run()
+	for _, mus := range mc.MUSs {
+		fmt.Println("MUS: ", mus)
+	}
+
+	for _, mss := range mc.MSSs {
+		fmt.Println("MSS: ", mss)
+	}
 }
