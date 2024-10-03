@@ -15,6 +15,8 @@ import (
 )
 
 func typeCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	haskellFile, err := getHaskellFile(r)
 	if err != nil {
 		fmt.Println("Error extracting Haskell file")

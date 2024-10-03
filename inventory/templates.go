@@ -61,16 +61,18 @@ var functionTemplate1 = NewTemplate("fun1", "{{ . }}(_, Calls, _, _, _, _) :- me
 var functionTemplate2 = NewTemplate("fun2", `
 {{- .Name }}(T, Calls, Gamma, Zeta, Theta, Classes) :-
 	Calls_ = [{{ .Name }} | Calls],
+	{{ if ne (len .Captures) 0 -}}
 	Gamma = [ {{ joinInt .Captures "_" "," }} ],
+	{{ end -}}
 	{{ if ne (len .Arguments) 0 -}}
     Zeta = [{{ joinStr .Arguments "_" "," }} | _],
 	{{ end -}}
 	{{- if ne (len .TypeVars) 0 -}}
     Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}, end],
 	{{ end -}}
-    {{ range .RuleBody   }}
-    {{ . }},
-    {{ end }}
+    {{ range .RuleBody   -}}
+    {{ . }},                                                                                    
+    {{ end -}}
 	true.
 `)
 

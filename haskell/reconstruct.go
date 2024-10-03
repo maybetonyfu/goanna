@@ -93,7 +93,7 @@ func makePair(term prolog_tool.Term) Pair {
 			case "tuple":
 				return Pair{tuple, firstArgCArg, secondArg}
 			default:
-				panic("Unknown compound type")
+				return Pair{adt, firstArgCArg, secondArg}
 			}
 		case prolog_tool.Atom:
 			firstArgC := firstArg.(prolog_tool.Atom)
@@ -200,7 +200,6 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 			} else {
 				argsText[i] = p.PrintTerm(arg)
 			}
-
 		}
 		return strings.Join(argsText, " ")
 	default:

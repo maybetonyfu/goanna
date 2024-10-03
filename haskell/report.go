@@ -144,7 +144,7 @@ func createSnapshot(criticalNodes []int, mcsNodes []int, nodeRange map[int]inven
 func ReportTypeError(rawError marco.Error, otherMSS mapset.Set[int], inv inventory.Inventory, file string) TypeError {
 	fixes := make([]Fix, len(rawError.Causes))
 	for i, cause := range rawError.Causes {
-		printer := NewPrinter()
+		printerLocal := NewPrinter()
 		completeMSS := otherMSS.Union(cause.MSS)
 		prologResult := inv.QueryTypes(completeMSS.ToSlice(), rawError.CriticalNodes)
 		globals := prologResult["G"]
@@ -155,6 +155,7 @@ func ReportTypeError(rawError marco.Error, otherMSS mapset.Set[int], inv invento
 
 		globalTypeMapping := make(map[string]string)
 		for i, v := range globalTypes.(prolog_tool.List).Values {
+			printer := NewPrinter()
 			decl := inv.Declarations[i]
 			globalTypeMapping[decl] = printer.GetType(v)
 		}
@@ -162,7 +163,7 @@ func ReportTypeError(rawError marco.Error, otherMSS mapset.Set[int], inv invento
 		localTypeMapping := make(map[int]string)
 		for i, v := range localTypes.(prolog_tool.List).Values {
 			nodeId := rawError.CriticalNodes[i]
-			localTypeMapping[nodeId] = printer.GetType(v)
+			localTypeMapping[nodeId] = printerLocal.GetType(v)
 		}
 
 		if err != nil {
