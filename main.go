@@ -1,7 +1,9 @@
 package main
 
-import "mil/marco"
+import (
+	prolog_tool "mil/prolog-tool"
+)
 
 func main() {
-	marco.TestSolver()
+	prolog_tool.TestParser()
 }

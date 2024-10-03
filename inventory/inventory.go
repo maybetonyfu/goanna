@@ -1,138 +1,12 @@
 package inventory
 
 import (
-	"bytes"
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
 	"mil/prolog-tool"
 	"slices"
-	"strconv"
 	"strings"
-	"text/template"
 )
-
-var preamble = `
-eq(X, Y) :- unify_with_occurs_check(X, Y).
-all_equal([_]) :- true.
-all_equal([X, Y|XS]) :- X=Y, all_equal([Y|XS]).
-
-member1(L,[L|_]) :- !.
-member1(L,[_|RS]) :- member1(L,RS).
-
-test_class([with(Class, Instance)|XS]) :-
-    nonvar(Class),
-    !,
-    call(Class, Instance),
-    test_class(XS).
-test_class(_).
-
-cons(T, _, _, _, _, _) :-
-    T = pair(function(A), B),
-    B = pair(function(C), D),
-    C = pair(list, A),
-    D = pair(list, A).
-`
-var typeCheckTemplate = NewTemplate("type-check", `
-type_check :-
-    once((
-        {{ joinStr . "" ",\n        " }}
-    )),
-    test_class(C).
-`)
-
-var typeCheckDeclTemplate = NewTemplate("type-check-decl", `
-	{{-  .Name  }}(_, [], _, _, [
-		{{- range $varName, $classes := .TypeVars -}}
-		has([{{ joinStr $classes "" ", " }}], {{ $varName }})
-		{{- end -}}
-	], C)`)
-
-var classRuleTemplate = NewTemplate("class-rule", `
-{{ .Name }}(T) :-
-    T = has(Class, _),
-    member1({{ .Name }}, Class),
-    {{ range .SuperClasses }}
-    	member1({{ . }}, Class),
-    {{ end }}
-    true
-`)
-
-var instanceRuleTemp = NewTemplate("instance-rule", `
-{{ .Name }}(T) :-
-    nonvar(T),
-    {{ range .Rules }}
-    	{{ . }},
-    {{ end }}
-    {{ range .SuperClasses }}
-    	{{ . }}(T),
-    {{ end }}
-    true
-`)
-
-var functionTemplate1 = NewTemplate("fun1", "{{ . }}(_, Calls, _, _, _, _) :- member1({{ . }}, Calls), !.")
-var functionTemplate2 = NewTemplate("fun2", `
-{{ .Name }}(T, Calls, Gamma, Zeta, Theta, Classes) :-
-	Calls_ = [{{ .Name }} | Calls],
-	Gamma = [ {{ joinInt .Captures "_" "," }} ],
-	{{ if ne (len .Arguments) 0 }}
-		Zeta = [{{ joinStr .Arguments "" "," }} | _],
-	{{ end }}
-	{{- if ne (len .TypeVars) 0 -}}
-		Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}],
-	{{- end }}
-	{{ joinStr .RuleBody "" ",\n        "}}.`)
-
-var mainTemplate = NewTemplate("main", `
-main(G) :-
-    once((
-        {{ range .Declarations -}}
-        	{{ . }}(_{{ . }}, [], [{{ joinInt (index $.CaptureByDecl .) "_" "," }}], _, _, C),
-        {{ end -}}
-        true
-    )),
-    test_class(C),
-    G=[
-    {{ range .AllCaptures -}}
-          _{{.}},
-    {{ end -}}
-    {{- range .Declarations -}}
-          _{{.}},
-    {{ end -}}
-    true
-    ].`)
-
-func TemplateToString(tmpl *template.Template, data interface{}) string {
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		panic(err)
-	}
-	return buf.String()
-}
-
-func joinInt(s []int, prefix, sep string) string {
-	parts := make([]string, len(s))
-	for i, s := range s {
-		parts[i] = prefix + strconv.Itoa(s)
-	}
-	return strings.Join(parts, sep)
-}
-
-func joinStr(s []string, prefix, sep string) string {
-	parts := make([]string, len(s))
-	for i, s := range s {
-		parts[i] = prefix + s
-	}
-	return strings.Join(parts, sep)
-}
-
-func NewTemplate(name, content string) *template.Template {
-	tmpl, err := template.New(name).Funcs(
-		template.FuncMap{"joinInt": joinInt, "joinStr": joinStr}).Parse(content)
-	if err != nil {
-		panic(err)
-	}
-	return tmpl
-}
 
 type RuleHead struct {
 	Id     int    `json:"id,omitempty"`
@@ -153,6 +27,13 @@ type NodePair struct {
 	Child  int `json:"child,omitempty"`
 }
 
+type Range struct {
+	FromLine int `json:"from_line,omitempty"`
+	ToLine   int `json:"to_line,omitempty"`
+	FromCol  int `json:"from_col,omitempty"`
+	ToCol    int `json:"to_col,omitempty"`
+}
+
 type Input struct {
 	BaseModules  []string                       `json:"base_modules,omitempty"`
 	Rules        []Rule                         `json:"rules,omitempty"`
@@ -163,6 +44,7 @@ type Input struct {
 	Classes      map[string][]string            `json:"classes,omitempty"`
 	NodeTable    []NodePair                     `json:"node_graph,omitempty"`
 	MaxLevel     int                            `json:"max_depth,omitempty"`
+	NodeRange    map[int]Range                  `json:"node_range,omitempty"`
 }
 
 type Inventory struct {
@@ -186,10 +68,12 @@ func NewInventory(input Input) *Inventory {
 	instanceRules := make(map[string]map[int][]string)
 	for _, rule := range input.Rules {
 		if rule.Head.Type == "instance" {
+			if instanceRules[rule.Head.Name] == nil {
+				instanceRules[rule.Head.Name] = make(map[int][]string)
+			}
 			instanceRules[rule.Head.Name][rule.Head.Id] = append(instanceRules[rule.Head.Name][rule.Head.Id], rule.Body)
 		}
 	}
-
 	return &Inventory{
 		Input:          input,
 		AxiomaticRules: make([]int, 0),
@@ -230,16 +114,28 @@ func (inv *Inventory) Generalize(currentLevel int) {
 }
 
 func (inv *Inventory) RenderTypeChecking() string {
-	decls := make([]string, 0)
-	for _, decl := range inv.Declarations {
-		s := TemplateToString(typeCheckDeclTemplate, struct {
-			Name     string
-			TypeVars map[string][]string
-		}{decl, inv.TypeVars[decl]})
-		decls = append(decls, s)
+	type Context struct {
+		Name     string
+		TypeVars map[string][]string
+		IsLast   bool
 	}
 
-	return TemplateToString(typeCheckTemplate, decls)
+	context := make([]Context, 0)
+
+	for i, decl := range inv.Declarations {
+		//goal := TemplateToString(typeCheckDeclTemplate, struct {
+		//	Name     string
+		//	TypeVars map[string][]string
+		//}{decl, inv.TypeVars[decl]})
+		//decls = append(decls, )
+		context = append(context, Context{
+			Name:     decl,
+			TypeVars: inv.TypeVars[decl],
+			IsLast:   i == len(inv.Declarations)-1,
+		})
+	}
+
+	return TemplateToString(typeCheckTemplate, context)
 }
 
 func (inv *Inventory) RenderMain(captures []int) string {
@@ -276,7 +172,7 @@ func (inv *Inventory) RenderClassRules() []string {
 			classRules = append(classRules, r)
 		}
 	}
-	return nil
+	return classRules
 }
 
 func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
@@ -286,6 +182,7 @@ func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
 		ownTypingRuleBody := make([]string, 0)
 		capturedNodes := make([]int, 0)
 		ownArguments := inv.Arguments[name]
+		fmt.Printf("%s: %v\n", name, ownArguments)
 		owenTypeVars := make([]string, 0)
 		for varName := range inv.TypeVars[name] {
 			owenTypeVars = append(owenTypeVars, varName)
@@ -352,6 +249,24 @@ func (inv *Inventory) TypeCheck() bool {
 	}
 	program := strings.Join(parts, "\n")
 	return inv.logic.ConsultAndCheck(program, "type_check.")
+}
+
+func (inv *Inventory) QueryTypes(rules, captures []int) map[string]string {
+	typingRules := inv.RenderTypingRules(rules, captures)
+	classRules := inv.RenderClassRules()
+	mainPredicate := inv.RenderMain(captures)
+	parts := []string{
+		preamble,
+		strings.Join(typingRules, "\n"),
+		strings.Join(classRules, "\n"),
+		mainPredicate,
+	}
+	program := strings.Join(parts, "\n")
+	succeed, result := inv.logic.ConsultAndQuery1(program, "main(G, L).")
+	if !succeed {
+		panic("Provided MSS is unsatisfiable")
+	}
+	return result
 }
 
 func (inv *Inventory) Satisfiable(rules []int) bool {

@@ -8,10 +8,14 @@ import (
 
 type IntSet mapset.Set[int]
 
+type Cause struct {
+	MCS  IntSet
+	MSS  IntSet
+	Type any
+}
+
 type Error struct {
-	MCSs          []IntSet
-	MSSs          []IntSet
-	MUSs          []IntSet
+	Causes        []Cause
 	CriticalNodes []int
 }
 
@@ -20,26 +24,28 @@ func NewIntSet(vals ...int) IntSet {
 }
 
 type Marco struct {
-	Rules       IntSet
-	MUSs        []IntSet
-	MCSs        []IntSet
-	MSSs        []IntSet
-	MaxLoop     int
-	LoopCounter int
-	SatFunc     func([]int) bool
-	Solver      Solver
+	Rules        IntSet
+	MUSs         []IntSet
+	MCSs         []IntSet
+	MSSs         []IntSet
+	MaxLoop      int
+	LoopCounter  int
+	SatFunc      func([]int) bool
+	Solver       Solver
+	singletonMUS IntSet
 }
 
 func NewMarco(rules []int, satFunc func([]int) bool) *Marco {
 	marco := Marco{
-		Rules:       mapset.NewSet[int](rules...),
-		MUSs:        []IntSet{},
-		MCSs:        []IntSet{},
-		MSSs:        []IntSet{},
-		MaxLoop:     1000,
-		LoopCounter: 0,
-		SatFunc:     satFunc,
-		Solver:      NewMaxsatSolver(NewIntSet(rules...)),
+		Rules:        mapset.NewSet[int](rules...),
+		MUSs:         []IntSet{},
+		MCSs:         []IntSet{},
+		MSSs:         []IntSet{},
+		MaxLoop:      1000,
+		LoopCounter:  0,
+		SatFunc:      satFunc,
+		Solver:       NewMaxsatSolver(NewIntSet(rules...)),
+		singletonMUS: NewIntSet(),
 	}
 	return &marco
 }
@@ -58,6 +64,9 @@ func (m *Marco) Grow(seed IntSet) IntSet {
 func (m *Marco) Shrink(seed IntSet) IntSet {
 	newSeed := seed.Clone()
 	for elem := range newSeed.Iter() {
+		if m.singletonMUS.Contains(elem) {
+			continue
+		}
 		newSet := seed.Difference(NewIntSet(elem))
 		if !m.Sat(newSet) {
 			seed.Remove(elem)
@@ -82,11 +91,15 @@ func (m *Marco) Run() {
 		//fmt.Printf("Seed: %d\n", seed.ToSlice())
 
 		if m.Sat(seed) {
-			mss := m.Grow(seed)
+			mss := seed
 			m.MSSs = append(m.MSSs, mss)
 			//fmt.Printf("Found MSS: %s \n", mss)
 
 			mcs := m.Rules.Difference(mss)
+			mcsSlice := mcs.ToSlice()
+			if len(mcsSlice) == 1 {
+				m.singletonMUS.Add(mcsSlice[0])
+			}
 			//fmt.Printf("Add Clause: %s \n", mcs)
 			m.Solver.AddClause(mcs)
 		} else {
@@ -127,7 +140,7 @@ func (m *Marco) Analysis() []Error {
 	for i := range musIndexList {
 		musIndexList[i] = i
 	}
-	fmt.Printf("%v\n", m.MUSs)
+	//fmt.Printf("%v\n", m.MUSs)
 	musGraph := graph.NewGraph(len(musIndexList))
 	for _, combination := range combinations(musIndexList) {
 		index1 := combination[0]
@@ -142,21 +155,15 @@ func (m *Marco) Analysis() []Error {
 	}
 
 	_, components := musGraph.CountAndGetConnectedComponents()
-	fmt.Printf("Components: \n %v\n", components)
+	//fmt.Printf("Components: \n %v\n", components)
 
 	errors := make([]Error, 0)
-	for i, component := range components {
-		fmt.Println(`Disconnected component `, i, component)
+	for _, component := range components {
 		musList := make([]IntSet, 0)
-		mssList := make([]IntSet, 0)
 		mcsList := make([]IntSet, 0)
 		for _, musId := range component {
-			fmt.Println(`Disconnected component `, i, musId)
-
 			musList = append(musList, m.MUSs[musId])
 		}
-		fmt.Println(`Disconnected component `, i, musList)
-
 		criticalNodes := NewIntSet()
 		for _, mus := range musList {
 			criticalNodes = criticalNodes.Union(mus)
@@ -177,15 +184,14 @@ func (m *Marco) Analysis() []Error {
 				mcsList = append(mcsList, reduced)
 			}
 		}
+		causes := make([]Cause, len(mcsList))
 
-		for _, mcs := range mcsList {
-			mssList = append(mssList, criticalNodes.Difference(mcs))
+		for i, mcs := range mcsList {
+			causes[i] = Cause{mcs, criticalNodes.Difference(mcs), nil}
 		}
 
 		errors = append(errors, Error{
-			MCSs:          mcsList,
-			MSSs:          mssList,
-			MUSs:          musList,
+			Causes:        causes,
 			CriticalNodes: criticalNodes.ToSlice(),
 		})
 	}
@@ -194,7 +200,7 @@ func (m *Marco) Analysis() []Error {
 
 func TestMarco() {
 	satFunc := func(rules []int) bool {
-		solver := NewGiniSolver(NewIntSet(1, 2))
+		solver := NewMaxsatSolver(NewIntSet(1, 2))
 		allProls := [][]int{
 			{1},
 			{-1},

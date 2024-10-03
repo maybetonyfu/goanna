@@ -8,4 +8,7 @@ require (
 	github.com/irifrance/gini v1.0.1
 )
 
-require github.com/crillab/gophersat v1.4.0 // indirect
+require (
+	github.com/alecthomas/participle/v2 v2.1.1 // indirect
+	github.com/crillab/gophersat v1.4.0 // indirect
+)

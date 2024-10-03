@@ -15,13 +15,9 @@ func NewProlog() *Logic {
 	}
 }
 
-type Functor struct {
-	f string
-	//args []*Functor
-}
-
 func (p *Logic) ConsultAndCheck(program string, query string) bool {
 	if err := p.prolog.Exec(program); err != nil {
+		fmt.Printf(program)
 		panic(err)
 	}
 	solutions, err := p.prolog.Query(query)

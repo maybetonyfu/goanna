@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Main</title>
+    <head>
+        <script src="//unpkg.com/alpinejs" defer></script>
+        <script src="https://cdn.twind.style" crossorigin></script>
+        <style>
+            html, body {
+                height: 100%;
+            }
+        </style>
+    </head>
+</head>
+<body class="flex flex-col" x-data="{
+        code: ''
+    }">
+    <nav class="bg-blue-700 text-white p-2">
+        <button @click="handleProlog(code)" class="bg-blue-400 px-1">Prolog</button>
+        <button @click="handleTypeCheck(code)" class="bg-blue-400 px-1">Type Check</button>
+
+    </nav>
+    <main class="bg-gray-200 h-full w-full flex">
+        <section class="w-1/2">
+            <textarea class="w-full h-full p-2 font-mono outline-none" x-model="code"></textarea>
+        </section>
+        <section class="1/2">
+        </section>
+    </main>
+</body>
+<script>
+async function handleProlog(text) {
+    let req = await  fetch("http://localhost:8090/prolog", {
+        method: "POST",
+        body: text
+    })
+    let prolog = await req.text()
+    console.log(prolog)
+}
+
+async function handleTypeCheck(text) {
+    console.log(text)
+    let req = await  fetch("http://localhost:8090/typecheck", {
+        method: "POST",
+        body: text
+    })
+    let result = await req.json()
+    console.log(result)
+}
+</script>
+</html>

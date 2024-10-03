@@ -1,3 +1,5 @@
+github.com/alecthomas/participle/v2 v2.1.1 h1:hrjKESvSqGHzRb4yW1ciisFJ4p3MGYih6icjJvbsmV8=
+github.com/alecthomas/participle/v2 v2.1.1/go.mod h1:Y1+hAs8DHPmc3YUFzqllV+eSQ9ljPTk0ZkPMtEdAx2c=
 github.com/crillab/gophersat v1.4.0 h1:irf9ajKmNnEURjgPU4oz+ouqIXXLQ59ZNd3NC+hULMc=
 github.com/crillab/gophersat v1.4.0/go.mod h1:gDzeMEBrqJR20IL9JW25tFHNGLU5+GDeJzr0zpi3mxs=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
