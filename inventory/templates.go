@@ -25,9 +25,9 @@ type_check :-
     once((
         {{ range . -}}
 			{{-  .Name  }}(_, [], _, _, [
-				{{- range $varName, $classes := .TypeVars -}}
-					has([{{ joinStr $classes "" ", " }}], {{ $varName }}),
-				{{- end -}}end], C_{{.Name}}){{ if not .IsLast }},{{ end }}
+				{{- range .VarClasses -}}
+					has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
+				{{- end -}}], C_{{.Name}}){{ if not .IsLast }},{{ end }}
         {{ end -}}
     )),
     {{ range . -}}
@@ -68,7 +68,7 @@ var functionTemplate2 = NewTemplate("fun2", `
     Zeta = [{{ joinStr .Arguments "_" "," }} | _],
 	{{ end -}}
 	{{- if ne (len .TypeVars) 0 -}}
-    Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}, end],
+    Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}],
 	{{ end -}}
     {{ range .RuleBody   -}}
     {{ . }},                                                                                    
@@ -78,12 +78,18 @@ var functionTemplate2 = NewTemplate("fun2", `
 
 var mainTemplate = NewTemplate("main", `
 main(G, L) :-
-    once((
-        {{ range .Declarations -}}
-        	{{ . }}(_{{ . }}, [], [{{ joinInt (index $.CaptureByDecl .) "_" "," }}], _, _, C_{{.}}),
-        {{ end -}}
-        true
-    )),
+	{{ range .Declarations -}}
+		{{ . }}(
+			_{{ . }}, 
+			[], 
+			[{{ joinInt (index $.CaptureByDecl .) "_" "," }}], 
+			_, 
+			[ {{ range (index $.TypeVarsByDecl .) }}
+				has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
+              {{ end }}
+			],
+			C_{{.}}),
+	{{ end -}}
     {{ range .Declarations -}}
       test_class(C_{{.}}),
 	{{ end -}}

@@ -24,7 +24,7 @@ type Compound struct {
 }
 
 type List struct {
-	Values []Term `"[" @@ ( "," @@)*  ("|" Var)? "]"`
+	Values []Term `"[" (@@ ( "," @@)*  ("|" Var)?)? "]"`
 }
 
 type Formula struct {
@@ -82,4 +82,11 @@ func TestParser() {
 		return
 	}
 	fmt.Printf("%#v\n", g)
+
+	g, e = termParser.ParseString("Test.file", "[]")
+	if e != nil {
+		fmt.Println(e)
+		return
+	}
+	fmt.Printf("%#v\n", len((g.Formula).(List).Values))
 }

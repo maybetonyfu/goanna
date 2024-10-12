@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	mapset "github.com/deckarep/golang-set/v2"
 	"html/template"
 	"io"
 	"log"
@@ -37,7 +36,6 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 		if level == 0 {
 			panic("No more level to generalize ")
 		}
-		fmt.Printf("Current level: %d\n", level)
 		inv.Generalize(level)
 		if !inv.AxiomCheck() {
 			level = level - 1
@@ -58,30 +56,19 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	tError := make([]haskell.TypeError, len(errors))
-	if len(errors) > 0 {
-		for i, rawError := range errors {
-			otherMSS := mapset.NewSet[int]()
-			for j, otherErr := range errors {
-				if i == j {
-					continue
-				}
-				otherMSS = otherMSS.Union(otherErr.Causes[0].MSS)
-			}
-			tError[i] = haskell.ReportTypeError(rawError, otherMSS, *inv, haskellFile)
-		}
-	}
-
-	json.NewEncoder(w).Encode(tError)
+	report := haskell.MakeReport(errors, *inv, haskellFile)
+	json.NewEncoder(w).Encode(report)
 }
 
 func renderProlog(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	haskellFile, err := getHaskellFile(r)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Println(haskellFile)
 	input, err := parseHaskellFile(haskellFile)
 
 	if err != nil {

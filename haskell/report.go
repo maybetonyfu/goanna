@@ -1,7 +1,7 @@
 package haskell
 
 import (
-	mapset "github.com/deckarep/golang-set/v2"
+	"fmt"
 	"mil/inventory"
 	"mil/marco"
 	prolog_tool "mil/prolog-tool"
@@ -32,15 +32,25 @@ type Line struct {
 }
 
 type Fix struct {
-	CriticalNodes []int
-	LocalType     map[int]string
-	GlobalType    map[string]string
-	Snapshot      []Line
+	LocalType  map[int]string
+	GlobalType map[string]string
+	MCS        []int
+	Snapshot   []Line
+}
+
+type NodeDetail struct {
+	DisplayName string
+	Range       inventory.Range
 }
 
 type TypeError struct {
-	CriticalNodes []int
+	CriticalNodes map[int]NodeDetail
 	Fixes         []Fix
+}
+
+type Report struct {
+	TypeErrors []TypeError
+	NodeRange  map[int]inventory.Range
 }
 
 func shrinkRangeOnLine(loc inventory.Range, lineNum int, lineLength int) (int, int) {
@@ -63,7 +73,6 @@ func createSnapshot(criticalNodes []int, mcsNodes []int, nodeRange map[int]inven
 	lineHasNode := make(map[int][]int)
 	for _, node := range criticalNodes {
 		loc := nodeRange[node]
-
 		lineHasNode[node] = make([]int, 0)
 		for i := loc.FromLine; i <= loc.ToLine; i++ {
 			lineHasNode[i] = append(lineHasNode[i], node)
@@ -141,14 +150,42 @@ func createSnapshot(criticalNodes []int, mcsNodes []int, nodeRange map[int]inven
 	return lines
 }
 
-func ReportTypeError(rawError marco.Error, otherMSS mapset.Set[int], inv inventory.Inventory, file string) TypeError {
+func getDisplayName(loc inventory.Range, file string) string {
+	lines := strings.Split(file, "\n")
+	if loc.FromLine != loc.ToLine {
+		fromLine := lines[loc.FromLine]
+		toLine := lines[loc.ToLine]
+		start := fromLine[loc.FromCol : loc.FromCol+4]
+		var end string
+		if loc.ToCol < 4 {
+			end = toLine[0:loc.ToCol]
+
+		} else {
+			end = toLine[loc.ToCol-4 : loc.ToCol]
+		}
+
+		return strings.Join([]string{start, end}, "...")
+
+	} else {
+		line := lines[loc.FromLine]
+		if loc.ToCol-loc.FromCol > 8 {
+			start := line[loc.FromCol : loc.FromCol+4]
+			end := line[loc.ToCol-4 : loc.ToCol]
+			return strings.Join([]string{start, end}, "...")
+		}
+		return line[loc.FromCol:loc.ToCol]
+
+	}
+
+}
+
+func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string) TypeError {
 	fixes := make([]Fix, len(rawError.Causes))
 	for i, cause := range rawError.Causes {
-		printerLocal := NewPrinter()
-		completeMSS := otherMSS.Union(cause.MSS)
-		prologResult := inv.QueryTypes(completeMSS.ToSlice(), rawError.CriticalNodes)
+		prologResult := inv.QueryTypes(cause.MSS.ToSlice(), rawError.CriticalNodes)
 		globals := prologResult["G"]
 		locals := prologResult["L"]
+		fmt.Printf("Local Types: %v\nMCS: %v\n", locals, cause.MCS)
 
 		globalTypes, err := prolog_tool.ParseTerm(globals)
 		localTypes, err := prolog_tool.ParseTerm(locals)
@@ -162,8 +199,9 @@ func ReportTypeError(rawError marco.Error, otherMSS mapset.Set[int], inv invento
 
 		localTypeMapping := make(map[int]string)
 		for i, v := range localTypes.(prolog_tool.List).Values {
+			printer := NewPrinter()
 			nodeId := rawError.CriticalNodes[i]
-			localTypeMapping[nodeId] = printerLocal.GetType(v)
+			localTypeMapping[nodeId] = printer.GetType(v)
 		}
 
 		if err != nil {
@@ -171,14 +209,69 @@ func ReportTypeError(rawError marco.Error, otherMSS mapset.Set[int], inv invento
 		}
 		lines := createSnapshot(rawError.CriticalNodes, cause.MCS.ToSlice(), inv.NodeRange, file)
 		fixes[i] = Fix{
-			CriticalNodes: rawError.CriticalNodes,
-			LocalType:     localTypeMapping,
-			GlobalType:    globalTypeMapping,
-			Snapshot:      lines,
+			LocalType:  localTypeMapping,
+			GlobalType: globalTypeMapping,
+			Snapshot:   lines,
+			MCS:        cause.MCS.ToSlice(),
+		}
+	}
+	slices.SortFunc(fixes, func(a, b Fix) int {
+		minMCS1 := slices.Min(a.MCS)
+		minMCS2 := slices.Min(b.MCS)
+		loc1 := inv.NodeRange[minMCS1]
+		loc2 := inv.NodeRange[minMCS2]
+		if loc1.FromLine < loc2.FromLine {
+			return -1
+		} else if loc1.FromLine > loc2.FromLine {
+			return 1
+		} else {
+			return loc1.FromCol - loc2.FromCol
+		}
+	})
+	nodeDetails := make(map[int]NodeDetail)
+	for _, node := range rawError.CriticalNodes {
+		nodeDetails[node] = NodeDetail{
+			DisplayName: getDisplayName(inv.NodeRange[node], file),
+			Range:       inv.NodeRange[node],
 		}
 	}
 	return TypeError{
 		Fixes:         fixes,
-		CriticalNodes: rawError.CriticalNodes,
+		CriticalNodes: nodeDetails,
+	}
+}
+
+func MakeReport(errors []marco.Error, inv inventory.Inventory, file string) Report {
+	tcErrors := make([]TypeError, len(errors))
+	for i, e := range errors {
+		tcErrors[i] = ReportTypeError(e, inv, file)
+	}
+	slices.SortFunc(tcErrors, func(a, b TypeError) int {
+		var minA, minB int = -1, -1
+		for k := range a.CriticalNodes {
+			if minA == -1 || k <= minA {
+				minA = k
+			}
+		}
+
+		for k := range b.CriticalNodes {
+			if minB == -1 || k <= minB {
+				minB = k
+			}
+		}
+		locA := inv.NodeRange[minA]
+		locB := inv.NodeRange[minB]
+		if locA.FromLine < locB.FromLine {
+			return -1
+		} else if locA.FromLine > locB.FromLine {
+			return 1
+		} else {
+			return locA.FromCol - locB.FromCol
+		}
+
+	})
+	return Report{
+		TypeErrors: tcErrors,
+		NodeRange:  inv.NodeRange,
 	}
 }

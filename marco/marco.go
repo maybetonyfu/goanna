@@ -187,13 +187,31 @@ func (m *Marco) Analysis() []Error {
 		causes := make([]Cause, len(mcsList))
 
 		for i, mcs := range mcsList {
-			causes[i] = Cause{mcs, criticalNodes.Difference(mcs), nil}
+			causes[i] = Cause{mcs, NewIntSet(), nil}
 		}
 
 		errors = append(errors, Error{
 			Causes:        causes,
 			CriticalNodes: criticalNodes.ToSlice(),
 		})
+	}
+
+	for i, err := range errors {
+		// This is to make sure the MSS correspond to each MCS is readily available to
+		// be query most concrete types.
+		// The idea is to pick a random MCS from other errors 1 to k, {m[1][0], ... m[k][0]}
+		// For each casue, corresponding to MCSs m[i][j], the MSS[i][j] is S - U{m[1][0], ... m[k][0], m[i][j]}
+		otherMCS := mapset.NewSet[int]()
+		for j, otherErr := range errors {
+			if i == j {
+				continue
+			}
+			otherMCS = otherMCS.Union(otherErr.Causes[0].MCS)
+		}
+		for j, cause := range err.Causes {
+			combinedMCS := cause.MCS.Union(otherMCS)
+			errors[i].Causes[j].MSS = m.Rules.Difference(combinedMCS)
+		}
 	}
 	return errors
 }

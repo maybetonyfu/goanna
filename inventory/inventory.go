@@ -8,43 +8,49 @@ import (
 	"strings"
 )
 
+type VarClass struct {
+	VarName string
+	Classes []string
+	IsLast  bool
+}
+
 type RuleHead struct {
-	Id     int    `json:"id,omitempty"`
-	Name   string `json:"name,omitempty"`
-	Module string `json:"module,omitempty"`
-	Type   string `json:"type,omitempty"`
+	Id     int    `json:"id"`
+	Name   string `json:"name"`
+	Module string `json:"module"`
+	Type   string `json:"type"`
 }
 
 type Rule struct {
-	Id      int      `json:"id,omitempty"`
+	Id      int      `json:"id"`
 	Head    RuleHead `json:"head"`
-	Body    string   `json:"body,omitempty"`
-	IsAxiom bool     `json:"is_axiom,omitempty"`
+	Body    string   `json:"body"`
+	IsAxiom bool     `json:"is_axiom"`
 }
 
 type NodePair struct {
-	Parent int `json:"parent,omitempty"`
-	Child  int `json:"child,omitempty"`
+	Parent int `json:"parent"`
+	Child  int `json:"child"`
 }
 
 type Range struct {
-	FromLine int `json:"from_line,omitempty"`
-	ToLine   int `json:"to_line,omitempty"`
-	FromCol  int `json:"from_col,omitempty"`
-	ToCol    int `json:"to_col,omitempty"`
+	FromLine int `json:"from_line"`
+	ToLine   int `json:"to_line"`
+	FromCol  int `json:"from_col"`
+	ToCol    int `json:"to_col"`
 }
 
 type Input struct {
-	BaseModules  []string                       `json:"base_modules,omitempty"`
-	Rules        []Rule                         `json:"rules,omitempty"`
-	Declarations []string                       `json:"declarations,omitempty"`
-	TypeVars     map[string]map[string][]string `json:"type_vars,omitempty"`
-	Arguments    map[string][]string            `json:"arguments,omitempty"`
-	NodeDepth    map[int]int                    `json:"node_depth,omitempty"`
-	Classes      map[string][]string            `json:"classes,omitempty"`
-	NodeTable    []NodePair                     `json:"node_graph,omitempty"`
-	MaxLevel     int                            `json:"max_depth,omitempty"`
-	NodeRange    map[int]Range                  `json:"node_range,omitempty"`
+	BaseModules  []string                       `json:"base_modules"`
+	Rules        []Rule                         `json:"rules"`
+	Declarations []string                       `json:"declarations"`
+	TypeVars     map[string]map[string][]string `json:"type_vars"`
+	Arguments    map[string][]string            `json:"arguments"`
+	NodeDepth    map[int]int                    `json:"node_depth"`
+	Classes      map[string][]string            `json:"classes"`
+	NodeTable    []NodePair                     `json:"node_graph"`
+	MaxLevel     int                            `json:"max_depth"`
+	NodeRange    map[int]Range                  `json:"node_range,"`
 }
 
 type Inventory struct {
@@ -55,6 +61,31 @@ type Inventory struct {
 	TypingRules    map[string][]Rule
 	InstanceRules  map[string]map[int][]string
 	logic          *prolog_tool.Logic
+}
+
+func (inv *Inventory) getVarClasses() map[string][]VarClass {
+	result := make(map[string][]VarClass)
+	for _, decl := range inv.Declarations {
+		varClasses := make([]VarClass, 0)
+		for varName, classes := range inv.TypeVars[decl] {
+			varClasses = append(varClasses, VarClass{varName, classes, false})
+		}
+
+		slices.SortFunc(varClasses, func(a, b VarClass) int {
+			if a.VarName > b.VarName {
+				return 1
+			} else if a.VarName < b.VarName {
+				return -1
+			} else {
+				return 0
+			}
+		})
+		if len(varClasses) > 0 {
+			varClasses[len(varClasses)-1].IsLast = true
+		}
+		result[decl] = varClasses
+	}
+	return result
 }
 
 func NewInventory(input Input) *Inventory {
@@ -114,24 +145,19 @@ func (inv *Inventory) Generalize(currentLevel int) {
 }
 
 func (inv *Inventory) RenderTypeChecking() string {
+
 	type Context struct {
-		Name     string
-		TypeVars map[string][]string
-		IsLast   bool
+		Name       string
+		VarClasses []VarClass
+		IsLast     bool
 	}
-
+	varClasses := inv.getVarClasses()
 	context := make([]Context, 0)
-
 	for i, decl := range inv.Declarations {
-		//goal := TemplateToString(typeCheckDeclTemplate, struct {
-		//	Name     string
-		//	TypeVars map[string][]string
-		//}{decl, inv.TypeVars[decl]})
-		//decls = append(decls, )
 		context = append(context, Context{
-			Name:     decl,
-			TypeVars: inv.TypeVars[decl],
-			IsLast:   i == len(inv.Declarations)-1,
+			Name:       decl,
+			VarClasses: varClasses[decl],
+			IsLast:     i == len(inv.Declarations)-1,
 		})
 	}
 
@@ -146,11 +172,21 @@ func (inv *Inventory) RenderMain(captures []int) string {
 			captureByDecl[rule.Head.Name] = append(captureByDecl[rule.Head.Name], rule.Id)
 		}
 	}
+	typeVarsByDecl := make(map[string][]string)
+	for decl, tvs := range inv.TypeVars {
+		declVars := make([]string, 0)
+		for varName, _ := range tvs {
+			declVars = append(declVars, varName)
+		}
+		typeVarsByDecl[decl] = declVars
+	}
+
 	return TemplateToString(mainTemplate, struct {
-		Declarations  []string
-		CaptureByDecl map[string][]int
-		AllCaptures   []int
-	}{inv.Declarations, captureByDecl, captures})
+		Declarations   []string
+		CaptureByDecl  map[string][]int
+		TypeVarsByDecl map[string][]VarClass
+		AllCaptures    []int
+	}{inv.Declarations, captureByDecl, inv.getVarClasses(), captures})
 }
 
 func (inv *Inventory) RenderClassRules() []string {
@@ -182,7 +218,6 @@ func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
 		ownTypingRuleBody := make([]string, 0)
 		capturedNodes := make([]int, 0)
 		ownArguments := inv.Arguments[name]
-		fmt.Printf("%s: %v\n", name, ownArguments)
 		owenTypeVars := make([]string, 0)
 		for varName := range inv.TypeVars[name] {
 			owenTypeVars = append(owenTypeVars, varName)

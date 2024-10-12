@@ -1,6 +1,7 @@
 package haskell
 
 import (
+	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
 	prolog_tool "mil/prolog-tool"
 	"slices"
@@ -28,7 +29,7 @@ type Printer struct {
 	varMapping  map[string]string
 	typeClasses map[string]mapset.Set[string]
 	jobId       int
-	jobVars     map[int]mapset.Set[string]
+	//jobVars     map[int]mapset.Set[string]
 }
 
 func NewPrinter() *Printer {
@@ -36,42 +37,51 @@ func NewPrinter() *Printer {
 		"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
 		"k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
 		"u", "v", "w", "x", "y", "z",
-		"a0", "b0", "c0", "d0", "e0", "f0", "g0", "h0",
-		"i0", "j0", "k0", "l0", "m0", "n0", "o0", "p0",
-		"q0", "r0", "s0", "t0", "u0", "v0", "w0", "x0",
-		"y0", "z0",
 	}
 	return &Printer{
 		jobId:       0,
 		varNames:    varNames,
 		varMapping:  make(map[string]string),
 		typeClasses: make(map[string]mapset.Set[string]),
-		jobVars:     make(map[int]mapset.Set[string]),
+		//jobVars:     make(map[int]mapset.Set[string]),
 	}
 }
 
-func (p *Printer) getOrCreateVarName(prologName string) string {
+func (p *Printer) getOrCreateVarName(lookupName string, preferSameName bool) string {
 	var v string
-	if _, ok := p.varMapping[prologName]; ok {
-		v = p.varMapping[prologName]
+	if _, ok := p.varMapping[lookupName]; ok {
+		v = p.varMapping[lookupName]
 	} else {
-		varName := p.varNames[0]
-		p.varNames = p.varNames[1:]
-		p.varMapping[prologName] = varName
-		p.typeClasses[varName] = mapset.NewSet[string]()
-		v = varName
+		var newVarName string
+		if preferSameName {
+			newVarName = "skolem_" + lookupName
+			slices.DeleteFunc(p.varNames, func(s string) bool {
+				return s == lookupName
+			})
+		} else {
+			newVarName = p.varNames[0]
+			p.varNames = p.varNames[1:]
+		}
+
+		p.varMapping[lookupName] = newVarName
+		p.typeClasses[newVarName] = mapset.NewSet[string]()
+		v = newVarName
 	}
 
-	if _, ok := p.jobVars[p.jobId]; ok {
-		p.jobVars[p.jobId].Add(v)
-	} else {
-		p.jobVars[p.jobId] = mapset.NewSet[string](v)
-	}
+	//if _, ok := p.jobVars[p.jobId]; ok {
+	//	p.jobVars[p.jobId].Add(v)
+	//} else {
+	//	p.jobVars[p.jobId] = mapset.NewSet[string](v)
+	//}
 	return v
 }
 
 func (p *Printer) printVar(term prolog_tool.Var) string {
-	return p.getOrCreateVarName(term.Value)
+	return p.getOrCreateVarName(term.Value, false)
+}
+
+func (p *Printer) printSkolemVar(term prolog_tool.Atom) string {
+	return p.getOrCreateVarName(term.Value, true)
 }
 
 func makePair(term prolog_tool.Term) Pair {
@@ -93,7 +103,7 @@ func makePair(term prolog_tool.Term) Pair {
 			case "tuple":
 				return Pair{tuple, firstArgCArg, secondArg}
 			default:
-				return Pair{adt, firstArgCArg, secondArg}
+				return Pair{adt, firstArg, secondArg}
 			}
 		case prolog_tool.Atom:
 			firstArgC := firstArg.(prolog_tool.Atom)
@@ -140,9 +150,8 @@ func unrollTuple(term prolog_tool.Term) []prolog_tool.Term {
 func unrollADT(term prolog_tool.Term) []prolog_tool.Term {
 	pair := makePair(term)
 	if pair.conType == adt {
-		return slices.Concat([]prolog_tool.Term{
-			pair.first,
-		}, unrollADT(pair.second))
+		return append(unrollADT(pair.first), pair.second)
+
 	} else {
 		return []prolog_tool.Term{
 			term,
@@ -163,7 +172,16 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 	switch {
 	case term.Value == "has":
 		typeClasses := term.Args[0].(prolog_tool.List)
-		typeVar := p.printVar(term.Args[1].(prolog_tool.Var))
+		var typeVar string
+		switch term.Args[1].(type) {
+		case prolog_tool.Atom:
+			// This is skolemized constant, we need to turn it into a type var, preferraby using the same letter
+			typeVar = p.printSkolemVar(term.Args[1].(prolog_tool.Atom))
+		case prolog_tool.Var:
+			typeVar = p.printVar(term.Args[1].(prolog_tool.Var))
+		default:
+			panic("has([..], X) where X is neither var or atom")
+		}
 		for _, class := range typeClasses.Values {
 			className := p.printAtom(class.(prolog_tool.Atom))
 			p.typeClasses[typeVar].Add(className)
@@ -225,12 +243,18 @@ func (p *Printer) PrintTerm(term prolog_tool.Term) string {
 
 func (p *Printer) GetType(term prolog_tool.Term) string {
 	typeString := p.PrintTerm(term)
-	typeVars := p.jobVars[p.jobId]
+	//typeVars := p.jobVars[p.jobId]
+	typeVars := make([]string, 0)
+
+	for _, val := range p.varMapping {
+		typeVars = append(typeVars, val)
+	}
+
 	if typeVars == nil {
 		return typeString
 	}
 	classRequirements := make([]string, 0)
-	for v := range typeVars.Iter() {
+	for _, v := range typeVars {
 		classes := p.typeClasses[v]
 		if classes == nil {
 			continue
@@ -245,8 +269,27 @@ func (p *Printer) GetType(term prolog_tool.Term) string {
 	} else if len(classRequirements) == 1 {
 		context = classRequirements[0] + "=>"
 	} else {
+		slices.Sort(classRequirements)
 		context = "(" + strings.Join(classRequirements, ",") + ")=>"
 	}
 	p.jobId += 1
 	return context + typeString
+}
+
+func TestReconstruct() {
+	prologStr := "pair(pair(p_Either,builtin_Int),builtin_Char)"
+	prologTerm, err := prolog_tool.ParseTerm(prologStr)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("prolog: %+v\n", prologTerm)
+	adts := unrollADT(prologTerm)
+	for _, adt := range adts {
+		fmt.Printf("adt: %+v\n", adt)
+	}
+
+	printer := NewPrinter()
+	s := printer.GetType(prologTerm)
+	fmt.Println(s)
+
 }
