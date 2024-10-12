@@ -1,0 +1,6 @@
+tree-sitter-haskell
+tree-sitter
+pydantic~=2.7.4
+funcy~=2.0
+fastapi~=0.111.0
+networkx
