@@ -148,8 +148,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 constructor: DataCon
                 head = state.head_of_typing_rule(constructor.canonical_name)
                 data_type = pair(LAtom(value=type_name), *[type_var(v, head.name) for v in type_vars])
-                state.add_rule(unify(T, fun_of(*[node_var(ty) for ty in constructor.tys], data_type)), head,
-                               constructor.id)
+                state.add_axiom(unify(T, fun_of(*[node_var(ty) for ty in constructor.tys], data_type)), head)
                 for ty in constructor.tys:
                     generate_constraint(ty, head, state)
 

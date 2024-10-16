@@ -68,7 +68,7 @@ func (inv *Inventory) getVarClasses() map[string][]VarClass {
 	for _, decl := range inv.Declarations {
 		varClasses := make([]VarClass, 0)
 		for varName, classes := range inv.TypeVars[decl] {
-			varClasses = append(varClasses, VarClass{varName, classes, false})
+			varClasses = append(varClasses, VarClass{varName + "__" + decl, classes, false})
 		}
 
 		slices.SortFunc(varClasses, func(a, b VarClass) int {
@@ -230,6 +230,7 @@ func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
 				capturedNodes = append(capturedNodes, rule.Id)
 			}
 		}
+		slices.Sort(owenTypeVars)
 		result = append(result, TemplateToString(functionTemplate1, name))
 		result = append(result, TemplateToString(functionTemplate2,
 			struct {

@@ -182,6 +182,7 @@ func getDisplayName(loc inventory.Range, file string) string {
 func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string) TypeError {
 	fixes := make([]Fix, len(rawError.Causes))
 	for i, cause := range rawError.Causes {
+		localPrinter := NewPrinter()
 		prologResult := inv.QueryTypes(cause.MSS.ToSlice(), rawError.CriticalNodes)
 		globals := prologResult["G"]
 		locals := prologResult["L"]
@@ -199,9 +200,14 @@ func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string)
 
 		localTypeMapping := make(map[int]string)
 		for i, v := range localTypes.(prolog_tool.List).Values {
-			printer := NewPrinter()
 			nodeId := rawError.CriticalNodes[i]
-			localTypeMapping[nodeId] = printer.GetType(v)
+			fmt.Printf("\n %d,", nodeId)
+			localTypeMapping[nodeId] = localPrinter.PrepareType(v, nodeId)
+		}
+		localPrinter.AssignVars()
+		for nodeId, v := range localTypeMapping {
+			fmt.Printf("\n %d,", nodeId)
+			localTypeMapping[nodeId] = localPrinter.CompileType(v, nodeId)
 		}
 
 		if err != nil {

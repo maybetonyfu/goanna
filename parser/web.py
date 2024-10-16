@@ -19,8 +19,10 @@ class (Eq a) => Ord a where
 instance Eq Int where
 instance Eq Float where
 instance Eq Bool where
+instance Eq Char where
 instance Ord Int where
 instance Ord Float where
+instance Ord Char where
 (==), (!=) :: Eq a => a -> a -> Bool
 (>),(<), (>=), (<=) :: Ord a => a -> a -> Bool
 '''
@@ -29,7 +31,7 @@ no_prelude = ''
 
 @app.post("/translate")
 async def translate(body: str = Body()):
-    state = run_modules([('Main', body), ('Prelude',  no_prelude)])
+    state = run_modules([('Main', body), ('Prelude',  prelude)])
 
     inventory_input = InventoryInput(
         base_modules=["Prelude"],

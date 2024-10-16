@@ -3,9 +3,11 @@ package haskell
 import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
+	"mil/inventory"
 	prolog_tool "mil/prolog-tool"
 	"slices"
 	"strings"
+	"text/template"
 )
 
 type constructorType int
@@ -24,56 +26,49 @@ type Pair struct {
 	second  prolog_tool.Term
 }
 
+type MetaVar struct {
+	tmpl           string
+	skolem         bool
+	preferredName  string
+	appearedInJobs mapset.Set[int]
+	typeClasses    mapset.Set[string]
+	friendlyName   string
+}
+
 type Printer struct {
-	varNames    []string
-	varMapping  map[string]string
-	typeClasses map[string]mapset.Set[string]
-	jobId       int
-	//jobVars     map[int]mapset.Set[string]
+	varMapping map[string]*MetaVar
+	currentJob int
 }
 
 func NewPrinter() *Printer {
-	varNames := []string{
-		"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
-		"k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
-		"u", "v", "w", "x", "y", "z",
-	}
+	varmapping := make(map[string]*MetaVar)
 	return &Printer{
-		jobId:       0,
-		varNames:    varNames,
-		varMapping:  make(map[string]string),
-		typeClasses: make(map[string]mapset.Set[string]),
-		//jobVars:     make(map[int]mapset.Set[string]),
+		varMapping: varmapping,
+		currentJob: 0,
 	}
 }
 
 func (p *Printer) getOrCreateVarName(lookupName string, preferSameName bool) string {
-	var v string
-	if _, ok := p.varMapping[lookupName]; ok {
-		v = p.varMapping[lookupName]
+	if mv, ok := p.varMapping[lookupName]; ok {
+		p.varMapping[lookupName].appearedInJobs.Add(p.currentJob)
+		return mv.tmpl
 	} else {
-		var newVarName string
-		if preferSameName {
-			newVarName = "skolem_" + lookupName
-			slices.DeleteFunc(p.varNames, func(s string) bool {
-				return s == lookupName
-			})
-		} else {
-			newVarName = p.varNames[0]
-			p.varNames = p.varNames[1:]
+		newVar := MetaVar{
+			tmpl:           fmt.Sprintf("{{ $.%s }}", lookupName),
+			skolem:         false,
+			preferredName:  "",
+			appearedInJobs: mapset.NewSet[int](p.currentJob),
+			typeClasses:    mapset.NewSet[string](),
+			friendlyName:   "",
 		}
 
-		p.varMapping[lookupName] = newVarName
-		p.typeClasses[newVarName] = mapset.NewSet[string]()
-		v = newVarName
+		if preferSameName {
+			newVar.skolem = true
+			newVar.preferredName = strings.Split(lookupName, "__")[0] // Remove the namespace of type var
+		}
+		p.varMapping[lookupName] = &newVar
+		return newVar.tmpl
 	}
-
-	//if _, ok := p.jobVars[p.jobId]; ok {
-	//	p.jobVars[p.jobId].Add(v)
-	//} else {
-	//	p.jobVars[p.jobId] = mapset.NewSet[string](v)
-	//}
-	return v
 }
 
 func (p *Printer) printVar(term prolog_tool.Var) string {
@@ -173,18 +168,21 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 	case term.Value == "has":
 		typeClasses := term.Args[0].(prolog_tool.List)
 		var typeVar string
+		var lookupString string
 		switch term.Args[1].(type) {
 		case prolog_tool.Atom:
 			// This is skolemized constant, we need to turn it into a type var, preferraby using the same letter
 			typeVar = p.printSkolemVar(term.Args[1].(prolog_tool.Atom))
+			lookupString = term.Args[1].(prolog_tool.Atom).Value
 		case prolog_tool.Var:
 			typeVar = p.printVar(term.Args[1].(prolog_tool.Var))
+			lookupString = term.Args[1].(prolog_tool.Var).Value
 		default:
 			panic("has([..], X) where X is neither var or atom")
 		}
 		for _, class := range typeClasses.Values {
 			className := p.printAtom(class.(prolog_tool.Atom))
-			p.typeClasses[typeVar].Add(className)
+			p.varMapping[lookupString].typeClasses.Add(className)
 		}
 		return typeVar
 
@@ -241,29 +239,124 @@ func (p *Printer) PrintTerm(term prolog_tool.Term) string {
 	}
 }
 
-func (p *Printer) GetType(term prolog_tool.Term) string {
+func findSuitableTypeVarName(preferredName string, usedNames []string) string {
+	if slices.Contains(usedNames, preferredName) {
+		var finalName string
+		for n := range 100 {
+			name := fmt.Sprintf("%s__%d", preferredName, n)
+			if slices.Contains(usedNames, preferredName) {
+				continue
+			}
+			finalName = name
+			break
+		}
+		return finalName
+	} else {
+		return preferredName
+	}
+}
+
+func findAvailableTypeVarName(usedNames []string) string {
+	for _, c := range "abcdefghijklmnopqrstuvwxyz" {
+		letter := string(c)
+		if slices.Contains(usedNames, letter) {
+			continue
+		}
+		return letter
+	}
+
+	for _, c := range "abcdefghijklmnopqrstuvwxyz" {
+		letter := string(c) + "__0"
+		if slices.Contains(usedNames, letter) {
+			continue
+		}
+		return letter
+	}
+
+	for _, c := range "abcdefghijklmnopqrstuvwxyz" {
+		letter := string(c) + "__1"
+		if slices.Contains(usedNames, letter) {
+			continue
+		}
+		return letter
+	}
+
+	panic("Could not find available type variable")
+}
+
+func allAssignedNames(varMap map[string]*MetaVar) []string {
+	result := make([]string, 0)
+	for _, meta := range varMap {
+		if meta.friendlyName != "" {
+			result = append(result, meta.friendlyName)
+		}
+	}
+	return result
+}
+
+func (p *Printer) PrepareType(term prolog_tool.Term, jobId int) string {
+	p.currentJob = jobId
 	typeString := p.PrintTerm(term)
-	//typeVars := p.jobVars[p.jobId]
-	typeVars := make([]string, 0)
+	return typeString
+}
 
-	for _, val := range p.varMapping {
-		typeVars = append(typeVars, val)
+func (p *Printer) AssignVars() {
+	for lookupName, metaVar := range p.varMapping {
+		names := allAssignedNames(p.varMapping)
+		if metaVar.skolem {
+			if slices.Contains(names, metaVar.preferredName) {
+				p.varMapping[lookupName].friendlyName = findSuitableTypeVarName(metaVar.preferredName, names)
+			}
+			metaVar.friendlyName = metaVar.preferredName
+			continue
+		}
 	}
 
-	if typeVars == nil {
-		return typeString
+	for lookupName, metaVar := range p.varMapping {
+		names := allAssignedNames(p.varMapping)
+		if metaVar.skolem {
+			continue
+		}
+
+		if metaVar.typeClasses.Contains("Monad") {
+			p.varMapping[lookupName].friendlyName = findSuitableTypeVarName("m", names)
+			continue
+		}
+
+		if metaVar.typeClasses.Contains("Applicative") ||
+			metaVar.typeClasses.Contains("Alternative") ||
+			metaVar.typeClasses.Contains("Functor") {
+			p.varMapping[lookupName].friendlyName = findSuitableTypeVarName("f", names)
+			continue
+		}
+
+		if metaVar.typeClasses.Contains("Foldable") {
+			p.varMapping[lookupName].friendlyName = findSuitableTypeVarName("t", names)
+			continue
+		}
+
+		p.varMapping[lookupName].friendlyName = findAvailableTypeVarName(names)
 	}
+
+}
+
+func (p *Printer) CompileType(templateStr string, jobId int) string {
 	classRequirements := make([]string, 0)
-	for _, v := range typeVars {
-		classes := p.typeClasses[v]
+	for _, metaVar := range p.varMapping {
+		classes := metaVar.typeClasses
+		if !metaVar.appearedInJobs.Contains(jobId) {
+			continue
+		}
 		if classes == nil {
 			continue
 		}
 		for c := range classes.Iter() {
-			classRequirements = append(classRequirements, c+" "+v)
+			classRequirements = append(classRequirements, c+" "+metaVar.tmpl)
 		}
 	}
+
 	var context string
+
 	if len(classRequirements) == 0 {
 		context = ""
 	} else if len(classRequirements) == 1 {
@@ -272,8 +365,21 @@ func (p *Printer) GetType(term prolog_tool.Term) string {
 		slices.Sort(classRequirements)
 		context = "(" + strings.Join(classRequirements, ",") + ")=>"
 	}
-	p.jobId += 1
-	return context + typeString
+
+	var varFriendlyNames = make(map[string]string)
+	for lookupName, metaVar := range p.varMapping {
+		varFriendlyNames[lookupName] = metaVar.friendlyName
+	}
+
+	tmpl := template.Must(template.New("").Parse(context + templateStr))
+	printType := inventory.TemplateToString(tmpl, varFriendlyNames)
+	return printType
+}
+
+func (p *Printer) GetType(term prolog_tool.Term) string {
+	templateStr := p.PrepareType(term, 0)
+	p.AssignVars()
+	return p.CompileType(templateStr, 0)
 }
 
 func TestReconstruct() {
@@ -287,7 +393,6 @@ func TestReconstruct() {
 	for _, adt := range adts {
 		fmt.Printf("adt: %+v\n", adt)
 	}
-
 	printer := NewPrinter()
 	s := printer.GetType(prologTerm)
 	fmt.Println(s)
