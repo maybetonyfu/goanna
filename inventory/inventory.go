@@ -139,11 +139,21 @@ func (inv *Inventory) Generalize(currentLevel int) {
 			nodes.Add(child)
 		}
 	}
+
 	leafNodes := nodes.Difference(parents)
 	axiomRules := make([]int, 0)
 	effectiveRules := make([]int, 0)
 	for _, rule := range inv.Rules {
-		if rule.IsAxiom || slices.Contains(inv.BaseModules, rule.Head.Module) || !leafNodes.Contains(rule.Id) {
+		fromOtherModule := slices.Contains(inv.BaseModules, rule.Head.Module)
+		//isOrphanNode := inv.NodeDepth[rule.Id] > currentLevel
+		//if isOrphanNode && !fromOtherModule {
+		//	fmt.Println("Orphan node detected, ", rule.Id)
+		//	continue
+		//}
+		isLeafNode := leafNodes.Contains(rule.Id)
+		if rule.IsAxiom ||
+			fromOtherModule ||
+			!isLeafNode {
 			axiomRules = append(axiomRules, rule.Id)
 		} else {
 			effectiveRules = append(effectiveRules, rule.Id)
@@ -354,7 +364,6 @@ func (inv *Inventory) AxiomCheck() bool {
 }
 
 func (inv *Inventory) TypeCheck() bool {
-
 	typingRules := inv.RenderTypingRules(inv.EffectiveRules, nil)
 	classRules := inv.RenderClassRules()
 	typeCheckPredicate := terminateClause(inv.RenderTypeChecking())

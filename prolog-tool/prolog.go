@@ -43,14 +43,12 @@ func (p *Logic) ConsultAndCheck(program string, query string) bool {
 
 func (p *Logic) Abolish(name string, n int) {
 	retract := fmt.Sprintf("abolish(%s/%d).", name, n)
-	fmt.Println(retract)
 	if err := p.prolog.QuerySolution(retract).Err(); err != nil {
 		panic(err)
 	}
 }
 
 func (p *Logic) Assertz(clause string) {
-	//fmt.Println(clause)
 	if err := p.prolog.QuerySolution(fmt.Sprintf("assertz((%s)).", clause)).Err(); err != nil {
 		panic(err)
 	}

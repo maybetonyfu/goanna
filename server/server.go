@@ -20,12 +20,15 @@ type Response struct {
 	TypeErrors    []haskell.TypeError
 	LoadingErrors []string
 	NodeRange     map[int]inventory.Range
+	InferredTypes map[string]string
+	Declarations  []string
 }
 
 const (
 	ParsingStage      = "parse"
 	TypeCheckingStage = "type-check"
 	ImportErrorStage  = "import"
+	WellTypedStage    = "well-typed"
 )
 
 func handleParsingError(w http.ResponseWriter, inv *inventory.Inventory) {
@@ -35,6 +38,8 @@ func handleParsingError(w http.ResponseWriter, inv *inventory.Inventory) {
 		ImportErrors:  []inventory.Identifier{},
 		Stage:         ParsingStage,
 		NodeRange:     inv.NodeRange,
+		InferredTypes: make(map[string]string),
+		Declarations:  inv.Declarations,
 	}
 	json.NewEncoder(w).Encode(response)
 }
@@ -46,6 +51,8 @@ func handleImportError(w http.ResponseWriter, inv *inventory.Inventory) {
 		ImportErrors:  inv.ImportErrors,
 		Stage:         ImportErrorStage,
 		NodeRange:     inv.NodeRange,
+		InferredTypes: make(map[string]string),
+		Declarations:  inv.Declarations,
 	}
 	json.NewEncoder(w).Encode(response)
 }
@@ -93,21 +100,41 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			mc := marco.NewMarco(ruleIds, inv.Satisfiable)
 			mc.Run()
 			errors = mc.Analysis()
+			if len(errors) == 1 && len(errors[0].CriticalNodes) == 0 {
+				level = level - 1
+				continue
+			}
 			break
-
 		} else {
 			break
 		}
 	}
-	report := haskell.MakeReport(errors, *inv, haskellFile)
-	response := Response{
-		Stage:         TypeCheckingStage,
-		TypeErrors:    report.TypeErrors,
-		ParsingErrors: []inventory.Range{},
-		ImportErrors:  []inventory.Identifier{},
-		NodeRange:     report.NodeRange,
+	if len(errors) != 0 { // Type error found
+		report := haskell.MakeReport(errors, *inv, haskellFile)
+		response := Response{
+			Stage:         TypeCheckingStage,
+			TypeErrors:    report.TypeErrors,
+			ParsingErrors: []inventory.Range{},
+			ImportErrors:  []inventory.Identifier{},
+			NodeRange:     report.NodeRange,
+			InferredTypes: make(map[string]string),
+			Declarations:  inv.Declarations,
+		}
+		json.NewEncoder(w).Encode(response)
+	} else {
+		// Well typed Program
+		response := Response{
+			Stage:         WellTypedStage,
+			TypeErrors:    []haskell.TypeError{},
+			ParsingErrors: []inventory.Range{},
+			ImportErrors:  []inventory.Identifier{},
+			NodeRange:     inv.NodeRange,
+			InferredTypes: haskell.InferTypes(*inv),
+			Declarations:  inv.Declarations,
+		}
+		json.NewEncoder(w).Encode(response)
 	}
-	json.NewEncoder(w).Encode(response)
+
 }
 
 func renderProlog(w http.ResponseWriter, r *http.Request) {

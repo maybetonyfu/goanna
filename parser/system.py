@@ -9,7 +9,7 @@ from node_table import gather_node_table
 from parser.walk import parse_haskell, make_ast
 from rename import rename
 from scope import get_vendors, get_buyers, allocate_buyers
-from state import HaskellParsingError, ParseEnv
+from state import HaskellParsingError, ParseEnv, Vendor
 from state import State, Closures
 from typeclass import gather_classes
 from typevar import gather_type_vars
@@ -44,7 +44,7 @@ def parse_modules(files: list[tuple[str, str]]) -> State:
     if state.parsing_errors:
         return state
     vendors = get_vendors(asts, state)
-    state.declarations = list({v.canonical_name for v in vendors if v.type == 'term' and v.is_declaration})
+
     buyers = get_buyers(asts)
     buyers, import_errors = allocate_buyers(vendors, buyers, import_map)
     state.import_errors = import_errors
@@ -56,6 +56,17 @@ def parse_modules(files: list[tuple[str, str]]) -> State:
     state.asts = asts
     node_table = gather_node_table(state.asts)
     state.node_table = node_table
+
+    declaration_vendors = [v for v in vendors if v.type == 'term' and v.is_declaration]
+    def vendor_sort (vd: Vendor):
+        return vd.module, node_table[vd.node_id][0][0], node_table[vd.node_id][0][1]
+    declaration_vendors = sorted(declaration_vendors, key=vendor_sort)
+    declarations = []
+    for d in declaration_vendors:
+        if d.canonical_name not in declarations:
+            declarations.append(d.canonical_name)
+    state.declarations = declarations
+
     return state
 
 

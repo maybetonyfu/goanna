@@ -178,6 +178,32 @@ func getDisplayName(loc inventory.Range, file string) string {
 
 }
 
+func InferTypes(inv inventory.Inventory) map[string]string {
+	// Infer global types for a SATISFIABLE set of constraints
+	prologResult := inv.QueryTypes(inv.EffectiveRules, []int{})
+	globals := prologResult["G"]
+	globalTypes, err := prolog_tool.ParseTerm(globals)
+	if err != nil {
+		panic("Error in parse types")
+	}
+	globalTypeMapping := make(map[string]string)
+	decls := make([]string, 0)
+
+	for _, decl := range inv.Declarations {
+		if !strings.HasPrefix(decl, "p_") {
+			decls = append(decls, decl)
+		}
+	}
+
+	for i, v := range globalTypes.(prolog_tool.List).Values {
+		printer := NewPrinter()
+		decl := decls[i]
+		globalTypeMapping[decl] = printer.GetType(v)
+	}
+
+	return globalTypeMapping
+}
+
 func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string) TypeError {
 	fixes := make([]Fix, len(rawError.Causes))
 	for i, cause := range rawError.Causes {
@@ -250,10 +276,10 @@ func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string)
 	}
 }
 
-func MakeReport(errors []marco.Error, inv inventory.Inventory, file string) Report {
+func MakeReport(errors []marco.Error, inv inventory.Inventory, srcProgram string) Report {
 	tcErrors := make([]TypeError, len(errors))
 	for i, e := range errors {
-		tcErrors[i] = ReportTypeError(e, inv, file)
+		tcErrors[i] = ReportTypeError(e, inv, srcProgram)
 	}
 	slices.SortFunc(tcErrors, func(a, b TypeError) int {
 		var minA, minB int = -1, -1
