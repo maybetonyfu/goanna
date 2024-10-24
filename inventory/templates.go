@@ -24,74 +24,66 @@ var typeCheckTemplate = NewTemplate("type-check", `
 type_check :-
     once((
         {{ range . -}}
-			{{-  .Name  }}(_, [], _, _, [
-				{{- range .VarClasses -}}
-					has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
-				{{- end -}}], C_{{.Name}}){{ if not .IsLast }},{{ end }}
+            {{-  .Name  }}(_, [], _, _, [
+                {{- range .VarClasses -}}
+                    has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
+                {{- end -}}], C_{{.Name}}){{ if not .IsLast }},{{ end }}
         {{ end -}}
     )),
-    {{ range . -}}
-    test_class(C_{{ .Name }}){{ if .IsLast }}.{{else}},{{ end }}
-	{{ end -}}
-`)
+    {{- range . }}
+    test_class(C_{{ .Name }}),
+    {{- end }}
+    true`)
 
 var classRuleTemplate = NewTemplate("class-rule", `
 {{ .Name }}(T) :-
     T = has(Class, _), !,
     member1({{ .Name }}, Class),
     {{ range .SuperClasses -}}
-    	member1({{ . }}, Class),
+        member1({{ . }}, Class),
     {{ end -}}
-    true.
-`)
+    true`)
 
 var instanceRuleTemp = NewTemplate("instance-rule", `
 {{ .Name }}(T) :-
     nonvar(T),
     {{ range .Rules -}}
-    	{{ . }},
+        {{ . }},
     {{ end -}}
     {{ range .SuperClasses -}}
-    	{{ . }}(T),
+        {{ . }}(T),
     {{ end -}}
-    true.
-`)
+    true`)
 
-var functionTemplate1 = NewTemplate("fun1", "{{ . }}(_, Calls, _, _, _, _) :- member1({{ . }}, Calls), !.")
+var functionTemplate1 = NewTemplate("fun1", "{{ . }}(_, Calls, _, _, _, _) :- member1({{ . }}, Calls), !")
 var functionTemplate2 = NewTemplate("fun2", `
-{{- .Name }}(T, Calls, Gamma, Zeta, Theta, Classes) :-
-	Calls_ = [{{ .Name }} | Calls],
-	{{ if ne (len .Captures) 0 -}}
-	Gamma = [ {{ joinInt .Captures "_" "," }} ],
-	{{ end -}}
-	{{ if ne (len .Arguments) 0 -}}
+{{- .Name }}(T, Calls, Gamma, Zeta, _, Classes) :-
+    Calls_ = [{{ .Name }} | Calls],
+    {{ if ne (len .Captures) 0 -}}
+    Gamma = [ {{ joinInt .Captures "_" "," }} ],
+    {{ end -}}
+    {{ if ne (len .Arguments) 0 -}}
     Zeta = [{{ joinStr .Arguments "_" "," }} | _],
-	{{ end -}}
-	{{- if ne (len .TypeVars) 0 -}}
-    Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}],
-	{{ end -}}
+    {{ end -}}
+    {{- if ne (len .TypeVars) 0 -}}
+        {{ end -}}
     {{ range .RuleBody   -}}
     {{ . }},                                                                                    
     {{ end -}}
-	true.
-`)
+    true`)
 
 var mainTemplate = NewTemplate("main", `
 main(G, L) :-
-	{{ range .Declarations -}}
-		{{ . }}(
-			_{{ . }}, 
-			[], 
-			[{{ joinInt (index $.CaptureByDecl .) "_" "," }}], 
-			_, 
-			[ {{ range (index $.TypeVarsByDecl .) }}
-				has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
-              {{ end }}
-			],
-			C_{{.}}),
-	{{ end -}}
-    {{ range .Declarations -}}
-      test_class(C_{{.}}),
-	{{ end -}}
+    {{- range .Declarations }}
+    {{ . }}(_{{- . -}}, [], [
+    {{- joinInt (index $.CaptureByDecl .) "_" "," -}}], _, [ 
+    {{- range (index $.TypeVarsByDecl .) -}}
+        has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
+    {{- end -}}
+    ], C_{{.}}),
+    {{- end }}
+    {{- range .Declarations }}
+    test_class(C_{{.}}),
+    {{- end }}
     L=[ {{ joinInt .AllCaptures "_" "," }} ],
-	G=[ {{ joinStr .Declarations "_" "," }} ].`)
+    G=[ {{ joinStr .Declarations "_" "," }} ]`)

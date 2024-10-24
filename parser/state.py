@@ -87,7 +87,6 @@ class RuleHead(BaseModel):
     def __str__(self):
         return self.name
 
-
 class Rule(BaseModel):
     head: RuleHead
     body: LTerm
@@ -105,6 +104,28 @@ class NodeRange(BaseModel):
     from_col: int
     to_col: int
 
+    @classmethod
+    def from_range(cls, range: Range):
+        return cls(from_line=range[0][0], to_line=range[1][0], from_col=range[0][1], to_col=range[1][1])
+
+class Identifier(BaseModel): # This is just a simpler vendor, for sending through wire
+    node_id: int
+    name: str
+    node_range: NodeRange
+    is_type: bool
+    is_term: bool
+
+    @classmethod
+    def from_buyer(cls, buyer: Buyer):
+        return cls(
+            node_id=buyer.node_id,
+            name=buyer.name,
+            node_range=NodeRange.from_range(buyer.usage_loc),
+            is_type=buyer.type == "type",
+            is_term=buyer.type == "term"
+        )
+
+
 class InventoryInput(BaseModel):
     declarations: list[str]
     base_modules: list[str]
@@ -116,6 +137,8 @@ class InventoryInput(BaseModel):
     node_graph: list[dict] = []
     max_depth: int = 0
     node_range: dict[int, NodeRange] = {}
+    parsing_errors: list[NodeRange]
+    import_errors: list[Identifier]
 
 class State(BaseModel):
     asts: list[Any] = []

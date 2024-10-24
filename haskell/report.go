@@ -1,7 +1,6 @@
 package haskell
 
 import (
-	"fmt"
 	"mil/inventory"
 	"mil/marco"
 	prolog_tool "mil/prolog-tool"
@@ -186,27 +185,31 @@ func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string)
 		prologResult := inv.QueryTypes(cause.MSS.ToSlice(), rawError.CriticalNodes)
 		globals := prologResult["G"]
 		locals := prologResult["L"]
-		fmt.Printf("Local Types: %v\nMCS: %v\n", locals, cause.MCS)
-
 		globalTypes, err := prolog_tool.ParseTerm(globals)
 		localTypes, err := prolog_tool.ParseTerm(locals)
 
 		globalTypeMapping := make(map[string]string)
+		decls := make([]string, 0)
+
+		for _, decl := range inv.Declarations {
+			if !strings.HasPrefix(decl, "p_") {
+				decls = append(decls, decl)
+			}
+		}
+
 		for i, v := range globalTypes.(prolog_tool.List).Values {
 			printer := NewPrinter()
-			decl := inv.Declarations[i]
+			decl := decls[i]
 			globalTypeMapping[decl] = printer.GetType(v)
 		}
 
 		localTypeMapping := make(map[int]string)
 		for i, v := range localTypes.(prolog_tool.List).Values {
 			nodeId := rawError.CriticalNodes[i]
-			fmt.Printf("\n %d,", nodeId)
 			localTypeMapping[nodeId] = localPrinter.PrepareType(v, nodeId)
 		}
 		localPrinter.AssignVars()
 		for nodeId, v := range localTypeMapping {
-			fmt.Printf("\n %d,", nodeId)
 			localTypeMapping[nodeId] = localPrinter.CompileType(v, nodeId)
 		}
 

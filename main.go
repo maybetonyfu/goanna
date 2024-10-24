@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	prolog_tool.TestParser()
+	prolog_tool.TestProlog()
 }

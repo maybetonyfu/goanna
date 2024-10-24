@@ -121,7 +121,7 @@ func unrollFunction(term prolog_tool.Term) []prolog_tool.Term {
 	if pair.conType == function {
 		return slices.Concat([]prolog_tool.Term{
 			pair.first,
-		}, unrollTuple(pair.second))
+		}, unrollFunction(pair.second))
 	} else {
 		return []prolog_tool.Term{
 			term,
@@ -134,7 +134,7 @@ func unrollTuple(term prolog_tool.Term) []prolog_tool.Term {
 	if pair.conType == tuple {
 		return slices.Concat([]prolog_tool.Term{
 			pair.first,
-		}, unrollFunction(pair.second))
+		}, unrollTuple(pair.second))
 	} else {
 		return []prolog_tool.Term{
 			term,
@@ -164,6 +164,7 @@ func (p *Printer) printAtom(term prolog_tool.Atom) string {
 }
 
 func (p *Printer) printCompound(term prolog_tool.Compound) string {
+	//fmt.Printf("Term: %v\n", term)
 	switch {
 	case term.Value == "has":
 		typeClasses := term.Args[0].(prolog_tool.List)

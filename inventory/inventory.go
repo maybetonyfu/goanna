@@ -40,17 +40,27 @@ type Range struct {
 	ToCol    int `json:"to_col"`
 }
 
+type Identifier struct {
+	NodeId    int    `json:"node_id"`
+	Name      string `json:"name"`
+	NodeRange Range  `json:"node_range"`
+	IsType    bool   `json:"is_type"`
+	IsTerm    bool   `json:"is_term"`
+}
+
 type Input struct {
-	BaseModules  []string                       `json:"base_modules"`
-	Rules        []Rule                         `json:"rules"`
-	Declarations []string                       `json:"declarations"`
-	TypeVars     map[string]map[string][]string `json:"type_vars"`
-	Arguments    map[string][]string            `json:"arguments"`
-	NodeDepth    map[int]int                    `json:"node_depth"`
-	Classes      map[string][]string            `json:"classes"`
-	NodeTable    []NodePair                     `json:"node_graph"`
-	MaxLevel     int                            `json:"max_depth"`
-	NodeRange    map[int]Range                  `json:"node_range,"`
+	BaseModules   []string                       `json:"base_modules"`
+	ParsingErrors []Range                        `json:"parsing_errors"`
+	ImportErrors  []Identifier                   `json:"import_errors"`
+	Rules         []Rule                         `json:"rules"`
+	Declarations  []string                       `json:"declarations"`
+	TypeVars      map[string]map[string][]string `json:"type_vars"`
+	Arguments     map[string][]string            `json:"arguments"`
+	NodeDepth     map[int]int                    `json:"node_depth"`
+	Classes       map[string][]string            `json:"classes"`
+	NodeTable     []NodePair                     `json:"node_graph"`
+	MaxLevel      int                            `json:"max_depth"`
+	NodeRange     map[int]Range                  `json:"node_range,"`
 }
 
 type Inventory struct {
@@ -145,7 +155,6 @@ func (inv *Inventory) Generalize(currentLevel int) {
 }
 
 func (inv *Inventory) RenderTypeChecking() string {
-
 	type Context struct {
 		Name       string
 		VarClasses []VarClass
@@ -153,12 +162,21 @@ func (inv *Inventory) RenderTypeChecking() string {
 	}
 	varClasses := inv.getVarClasses()
 	context := make([]Context, 0)
-	for i, decl := range inv.Declarations {
+	for _, decl := range inv.Declarations {
+		if strings.HasPrefix(decl, "p_") {
+			continue
+		}
 		context = append(context, Context{
 			Name:       decl,
 			VarClasses: varClasses[decl],
-			IsLast:     i == len(inv.Declarations)-1,
+			IsLast:     false,
 		})
+	}
+
+	for i, _ := range context {
+		if i == len(context)-1 {
+			context[i].IsLast = true
+		}
 	}
 
 	return TemplateToString(typeCheckTemplate, context)
@@ -167,6 +185,12 @@ func (inv *Inventory) RenderTypeChecking() string {
 func (inv *Inventory) RenderMain(captures []int) string {
 	slices.Sort(captures)
 	captureByDecl := make(map[string][]int)
+	ownDecals := make([]string, 0)
+	for _, decl := range inv.Declarations {
+		if !strings.HasPrefix(decl, "p_") {
+			ownDecals = append(ownDecals, decl)
+		}
+	}
 	for _, rule := range inv.Rules {
 		if slices.Contains(captures, rule.Id) {
 			captureByDecl[rule.Head.Name] = append(captureByDecl[rule.Head.Name], rule.Id)
@@ -186,7 +210,7 @@ func (inv *Inventory) RenderMain(captures []int) string {
 		CaptureByDecl  map[string][]int
 		TypeVarsByDecl map[string][]VarClass
 		AllCaptures    []int
-	}{inv.Declarations, captureByDecl, inv.getVarClasses(), captures})
+	}{ownDecals, captureByDecl, inv.getVarClasses(), captures})
 }
 
 func (inv *Inventory) RenderClassRules() []string {
@@ -244,11 +268,55 @@ func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
 	return result
 }
 
+func (inv *Inventory) renderChangedTypingRules(names []string, rules []int) []string {
+	var result []string
+	for _, name := range names {
+		ownTypingRule := inv.TypingRules[name]
+		ownTypingRuleBody := make([]string, 0)
+		ownArguments := inv.Arguments[name]
+		owenTypeVars := make([]string, 0)
+		for varName := range inv.TypeVars[name] {
+			owenTypeVars = append(owenTypeVars, varName)
+		}
+		for _, rule := range ownTypingRule {
+			if slices.Contains(rules, rule.Id) || slices.Contains(inv.AxiomaticRules, rule.Id) {
+				ownTypingRuleBody = append(ownTypingRuleBody, rule.Body)
+			}
+		}
+		slices.Sort(owenTypeVars)
+		result = append(result, TemplateToString(functionTemplate1, name))
+		result = append(result, TemplateToString(functionTemplate2,
+			struct {
+				Name      string
+				Arguments []string
+				Captures  []int
+				RuleBody  []string
+				TypeVars  []string
+			}{name, ownArguments, []int{}, ownTypingRuleBody, owenTypeVars}))
+	}
+	return result
+}
+
+func (inv *Inventory) findDeclarationsByRules(rules []int) []string {
+	var decls = mapset.NewSet[string]()
+	for _, rule := range inv.Rules {
+		if rule.Head.Type == "instance" {
+			continue
+		}
+		if slices.Contains(rules, rule.Id) {
+			decls.Add(rule.Head.Name)
+		}
+	}
+	return decls.ToSlice()
+}
+
 func (inv *Inventory) RenderProlog() string {
 	typingRules := inv.RenderTypingRules(inv.EffectiveRules, inv.EffectiveRules)
 	classRules := inv.RenderClassRules()
-	typeCheckPredicate := inv.RenderTypeChecking()
-	mainPredicate := inv.RenderMain(inv.EffectiveRules)
+	typeCheckPredicate := terminateClause(inv.RenderTypeChecking())
+	mainPredicate := terminateClause(inv.RenderMain(inv.EffectiveRules))
+	terminateClauses(classRules)
+	terminateClauses(typingRules)
 	parts := []string{
 		preamble,
 		strings.Join(typingRules, "\n"),
@@ -259,10 +327,22 @@ func (inv *Inventory) RenderProlog() string {
 	return strings.Join(parts, "\n")
 }
 
+func terminateClause(clause string) string {
+	return clause + "."
+}
+
+func terminateClauses(clauses []string) {
+	for i, clause := range clauses {
+		clauses[i] = terminateClause(clause)
+	}
+}
+
 func (inv *Inventory) AxiomCheck() bool {
 	typingRules := inv.RenderTypingRules(inv.AxiomaticRules, nil)
 	classRules := inv.RenderClassRules()
-	typeCheckPredicate := inv.RenderTypeChecking()
+	typeCheckPredicate := terminateClause(inv.RenderTypeChecking())
+	terminateClauses(classRules)
+	terminateClauses(typingRules)
 	parts := []string{
 		preamble,
 		strings.Join(typingRules, "\n"),
@@ -274,9 +354,13 @@ func (inv *Inventory) AxiomCheck() bool {
 }
 
 func (inv *Inventory) TypeCheck() bool {
+
 	typingRules := inv.RenderTypingRules(inv.EffectiveRules, nil)
 	classRules := inv.RenderClassRules()
-	typeCheckPredicate := inv.RenderTypeChecking()
+	typeCheckPredicate := terminateClause(inv.RenderTypeChecking())
+	terminateClauses(classRules)
+	terminateClauses(typingRules)
+
 	parts := []string{
 		preamble,
 		strings.Join(typingRules, "\n"),
@@ -290,7 +374,9 @@ func (inv *Inventory) TypeCheck() bool {
 func (inv *Inventory) QueryTypes(rules, captures []int) map[string]string {
 	typingRules := inv.RenderTypingRules(rules, captures)
 	classRules := inv.RenderClassRules()
-	mainPredicate := inv.RenderMain(captures)
+	mainPredicate := terminateClause(inv.RenderMain(captures))
+	terminateClauses(classRules)
+	terminateClauses(typingRules)
 	parts := []string{
 		preamble,
 		strings.Join(typingRules, "\n"),
@@ -305,16 +391,41 @@ func (inv *Inventory) QueryTypes(rules, captures []int) map[string]string {
 	return result
 }
 
-func (inv *Inventory) Satisfiable(rules []int) bool {
-	typingRules := inv.RenderTypingRules(rules, nil)
+func (inv *Inventory) ConsultAxioms() {
+	names := inv.findDeclarationsByRules(inv.EffectiveRules)
+	directives := make([]string, len(names))
+	for i, name := range names {
+		directives[i] = ":- dynamic(" + name + "/6)"
+	}
+	typingRules := inv.RenderTypingRules(nil, nil)
 	classRules := inv.RenderClassRules()
-	typeCheckPredicate := inv.RenderTypeChecking()
+
+	typeCheckPredicate := terminateClause(inv.RenderTypeChecking())
+	terminateClauses(classRules)
+	terminateClauses(typingRules)
+	terminateClauses(directives)
 	parts := []string{
+		strings.Join(directives, "\n"),
 		preamble,
 		strings.Join(typingRules, "\n"),
 		strings.Join(classRules, "\n"),
 		typeCheckPredicate,
 	}
-	program := strings.Join(parts, "\n")
-	return inv.logic.ConsultAndCheck(program, "type_check.")
+	text := strings.Join(parts, "\n")
+	inv.logic.Consult(text)
+}
+
+func (inv *Inventory) Satisfiable(rules []int) bool {
+	changedNames := inv.findDeclarationsByRules(rules)
+	typingRules := inv.renderChangedTypingRules(changedNames, rules)
+
+	for _, name := range changedNames {
+		inv.logic.Abolish(name, 6)
+	}
+
+	for _, rule := range typingRules {
+		inv.logic.Assertz(rule)
+	}
+
+	return inv.logic.Query("type_check.")
 }
