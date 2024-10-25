@@ -57,7 +57,11 @@ func handleImportError(w http.ResponseWriter, inv *inventory.Inventory) {
 }
 
 func typeCheck(w http.ResponseWriter, r *http.Request) {
+	// Allow all origins
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
+
 	haskellFile, err := getHaskellFile(r)
 	if err != nil {
 		fmt.Println("Error extracting Haskell file")
@@ -142,6 +146,8 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 
 func renderProlog(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
 	haskellFile, err := getHaskellFile(r)
 
 	if err != nil {
