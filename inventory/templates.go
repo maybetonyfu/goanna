@@ -57,7 +57,7 @@ var instanceRuleTemp = NewTemplate("instance-rule", `
 
 var functionTemplate1 = NewTemplate("fun1", "{{ . }}(_, Calls, _, _, _, _) :- member1({{ . }}, Calls), !")
 var functionTemplate2 = NewTemplate("fun2", `
-{{- .Name }}(T, Calls, Gamma, Zeta, _, Classes) :-
+{{- .Name }}(T, Calls, Gamma, Zeta, Theta, Classes) :-
     Calls_ = [{{ .Name }} | Calls],
     {{ if ne (len .Captures) 0 -}}
     Gamma = [ {{ joinInt .Captures "_" "," }} ],
@@ -66,7 +66,8 @@ var functionTemplate2 = NewTemplate("fun2", `
     Zeta = [{{ joinStr .Arguments "_" "," }} | _],
     {{ end -}}
     {{- if ne (len .TypeVars) 0 -}}
-        {{ end -}}
+	Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}],
+    {{ end -}}
     {{ range .RuleBody   -}}
     {{ . }},                                                                                    
     {{ end -}}

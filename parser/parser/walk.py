@@ -1,5 +1,6 @@
 from collections import deque
 from typing import cast
+from unittest import case
 
 import tree_sitter_haskell as haskell
 from funcy import first
@@ -261,6 +262,9 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
         case "literal":
             return match_literal(node.named_child(0), env)
 
+        case _:
+         raise HaskellParsingError(make_loc(node))
+
 
 def match_rhs(node: Node, env: ParseEnv) -> Rhs:
     rhs_nodes = node.children_by_field_name("match")
@@ -279,7 +283,10 @@ def match_rhs(node: Node, env: ParseEnv) -> Rhs:
             rhs_exp = ExpLambda(id=env.new_id(), loc=merge_locs(patterns_node, rhs_node), pats=pats,
                 exp=match_exp(rhs_node.child_by_field_name("expression"), env))
         if is_unguarded:
-            return UnguardedRhs(id=env.new_id(), loc=make_loc(rhs_node), exp=rhs_exp, wheres=wheres)
+            loc = make_loc(rhs_node)
+            if rhs_node.text.decode('utf8').startswith('='):
+                loc = [[loc[0][0], loc[0][1] + 1], loc[1]]
+            return UnguardedRhs(id=env.new_id(), loc=loc, exp=rhs_exp, wheres=wheres)
         else:
             guards_node = rhs_node.child_by_field_name("guards")
             guard_nodes = [g.named_child(0) for g in guards_node.children_by_field_name("guard")]
@@ -470,7 +477,8 @@ def parse_haskell(code: str) -> Node:
 
 if __name__ == "__main__":
     tree = parse_haskell("""
-x = ()
+x :: [Char]
+x = '4'
 """)
     print(tree)
     # query = haskell_language.query('(ERROR) @parsing_error')

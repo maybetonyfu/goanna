@@ -165,7 +165,6 @@ no_prelude = ''
 @app.post("/translate")
 async def translate(body: str = Body()):
     state = run_modules([('Main', body), ('Prelude',  prelude)])
-    print(state.declarations)
     inventory_input = InventoryInput(
         base_modules=["Prelude"],
         declarations=state.declarations,

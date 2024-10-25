@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"mil/haskell"
@@ -101,11 +100,15 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			mc.Run()
 			errors = mc.Analysis()
 			if len(errors) == 1 && len(errors[0].CriticalNodes) == 0 {
+				fmt.Printf("No solutions: %v\n", errors)
 				level = level - 1
 				continue
 			}
+			fmt.Println("Solutions found")
 			break
 		} else {
+			fmt.Println("No type error")
+
 			break
 		}
 	}
@@ -196,18 +199,8 @@ func parseHaskellFile(text string) (inventory.Input, error) {
 	return input, nil
 }
 
-func mainPage(w http.ResponseWriter, r *http.Request) {
-	t, err := template.ParseFiles("template/main.html")
-	if err != nil {
-		fmt.Println("Error parsing file")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	t.Execute(w, struct{}{})
-}
-
 func main() {
 	http.HandleFunc("/prolog", renderProlog)
 	http.HandleFunc("/typecheck", typeCheck)
-	http.HandleFunc("/", mainPage)
 	http.ListenAndServe(":8090", nil)
 }
