@@ -187,7 +187,7 @@ func (inv *Inventory) RenderTypeChecking() string {
 		})
 	}
 
-	for i, _ := range context {
+	for i := range context {
 		if i == len(context)-1 {
 			context[i].IsLast = true
 		}
@@ -213,7 +213,7 @@ func (inv *Inventory) RenderMain(captures []int) string {
 	typeVarsByDecl := make(map[string][]string)
 	for decl, tvs := range inv.TypeVars {
 		declVars := make([]string, 0)
-		for varName, _ := range tvs {
+		for varName := range tvs {
 			declVars = append(declVars, varName)
 		}
 		typeVarsByDecl[decl] = declVars

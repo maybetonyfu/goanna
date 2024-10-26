@@ -40,7 +40,10 @@ func handleParsingError(w http.ResponseWriter, inv *inventory.Inventory) {
 		InferredTypes: make(map[string]string),
 		Declarations:  inv.Declarations,
 	}
-	json.NewEncoder(w).Encode(response)
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func handleImportError(w http.ResponseWriter, inv *inventory.Inventory) {
@@ -53,7 +56,10 @@ func handleImportError(w http.ResponseWriter, inv *inventory.Inventory) {
 		InferredTypes: make(map[string]string),
 		Declarations:  inv.Declarations,
 	}
-	json.NewEncoder(w).Encode(response)
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func typeCheck(w http.ResponseWriter, r *http.Request) {
@@ -89,10 +95,6 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 	level := input.MaxLevel
 	errors := make([]marco.Error, 0)
 
-	fmt.Println("Rules:")
-	for _, rule := range input.Rules {
-		fmt.Println(rule.Id, rule.Body)
-	}
 	for {
 		if level == 0 {
 			panic("No more level to generalize ")
@@ -104,7 +106,6 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 		}
 		if !inv.TypeCheck() {
 			ruleIds := inv.EffectiveRules
-			fmt.Println(ruleIds)
 			inv.ConsultAxioms()
 			mc := marco.NewMarco(ruleIds, inv.Satisfiable)
 			mc.Run()
@@ -115,13 +116,6 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 				level = level - 1
 				continue
 			}
-			fmt.Println("Solutions found")
-			fmt.Println("MUSes: ")
-
-			for _, mus := range mc.MUSs {
-				fmt.Println(mus)
-			}
-
 			break
 		} else {
 			fmt.Println("No type error")
@@ -139,7 +133,10 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			InferredTypes: make(map[string]string),
 			Declarations:  inv.Declarations,
 		}
-		json.NewEncoder(w).Encode(response)
+		err := json.NewEncoder(w).Encode(response)
+		if err != nil {
+			panic(err)
+		}
 	} else {
 		// Well typed Program
 		response := Response{
@@ -151,7 +148,10 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			InferredTypes: haskell.InferTypes(*inv),
 			Declarations:  inv.Declarations,
 		}
-		json.NewEncoder(w).Encode(response)
+		err := json.NewEncoder(w).Encode(response)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 }
@@ -176,7 +176,10 @@ func renderProlog(w http.ResponseWriter, r *http.Request) {
 	level := input.MaxLevel
 	inv.Generalize(level)
 	prologText := inv.RenderProlog()
-	fmt.Fprintf(w, prologText)
+	_, err = fmt.Fprintf(w, prologText)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func getHaskellFile(r *http.Request) (string, error) {
@@ -186,7 +189,12 @@ func getHaskellFile(r *http.Request) (string, error) {
 		return "", err
 	}
 	// Close the request body
-	defer r.Body.Close()
+	defer func() {
+		err := r.Body.Close()
+		if err != nil {
+			log.Printf("Error closing body: %v", err)
+		}
+	}()
 	// Convert the byte slice to a string
 	requestBody := string(bodyBytes)
 	return requestBody, nil
@@ -202,7 +210,12 @@ func parseHaskellFile(text string) (inventory.Input, error) {
 		return inventory.Input{}, err
 
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Error read respond body")
@@ -220,5 +233,5 @@ func parseHaskellFile(text string) (inventory.Input, error) {
 func main() {
 	http.HandleFunc("/prolog", renderProlog)
 	http.HandleFunc("/typecheck", typeCheck)
-	http.ListenAndServe(":8090", nil)
+	_ = http.ListenAndServe(":8090", nil)
 }
