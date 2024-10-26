@@ -1,9 +1,9 @@
 package haskell
 
 import (
-	"mil/inventory"
-	"mil/marco"
-	prolog_tool "mil/prolog-tool"
+	"goanna/inventory"
+	"goanna/marco"
+	prolog_tool "goanna/prolog-tool"
 	"slices"
 	"strings"
 )

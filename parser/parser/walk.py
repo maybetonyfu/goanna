@@ -53,7 +53,7 @@ def match_literal(node: Node, env: ParseEnv) -> Lit:
         case "float":
             return LitFrac(id=env.new_id(), loc=make_loc(node))
         case _:
-            raise ValueError("Not a literal node")
+            raise HaskellParsingError(make_loc(node))
 
 
 def match_pat(node: Node, env: ParseEnv) -> Pat:
@@ -116,7 +116,7 @@ def match_pat(node: Node, env: ParseEnv) -> Pat:
 
         case _:
             print(node.type, node.text)
-            raise "Not implemented"
+            raise HaskellParsingError(make_loc(node))
 
 
 def match_alt(node: Node, env: ParseEnv) -> Alt:
@@ -263,7 +263,7 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
             return match_literal(node.named_child(0), env)
 
         case _:
-         raise HaskellParsingError(make_loc(node))
+             raise HaskellParsingError(make_loc(node))
 
 
 def match_rhs(node: Node, env: ParseEnv) -> Rhs:
@@ -336,6 +336,8 @@ def match_type(node: Node, env: ParseEnv) -> Ty:
         case "list":
             ty = match_type(node.child_by_field_name("element"), env)
             return TyList(id=env.new_id(), loc=make_loc(node), ty=ty)
+        case _:
+            raise HaskellParsingError(make_loc(node))
 
 
 def match_context(node: Node, env: ParseEnv) -> Context:
@@ -351,6 +353,9 @@ def match_context(node: Node, env: ParseEnv) -> Context:
         case "apply":
             # Single context
             tys = [match_type(node, env)]
+        case _:
+            raise HaskellParsingError(make_loc(node))
+
     return Context(id=env.new_id(), loc=make_loc(node), assertions=tys)
 
 
@@ -437,6 +442,10 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
             pat = match_pat(variable_node, env)
             rhs = match_rhs(node, env)
             return PatBind(id=env.new_id(), loc=make_loc(node), pat=pat, rhs=rhs)
+
+        case _:
+            raise HaskellParsingError(make_loc(node))
+
 
 
 def make_ast(node: Node, env: ParseEnv, module_name_alt: str | None = None) -> Module | None:

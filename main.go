@@ -1,9 +1,9 @@
 package main
 
 import (
-	prolog_tool "mil/prolog-tool"
+	prologtool "goanna/prolog-tool"
 )
 
 func main() {
-	prolog_tool.TestProlog()
+	prologtool.TestProlog()
 }

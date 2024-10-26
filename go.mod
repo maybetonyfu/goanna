@@ -1,4 +1,4 @@
-module mil
+module goanna
 
 go 1.23
 

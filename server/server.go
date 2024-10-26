@@ -3,11 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"goanna/haskell"
+	"goanna/inventory"
+	"goanna/marco"
 	"io"
 	"log"
-	"mil/haskell"
-	"mil/inventory"
-	"mil/marco"
 	"net/http"
 	"strings"
 )
@@ -88,6 +88,11 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	level := input.MaxLevel
 	errors := make([]marco.Error, 0)
+
+	fmt.Println("Rules:")
+	for _, rule := range input.Rules {
+		fmt.Println(rule.Id, rule.Body)
+	}
 	for {
 		if level == 0 {
 			panic("No more level to generalize ")
@@ -99,9 +104,11 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 		}
 		if !inv.TypeCheck() {
 			ruleIds := inv.EffectiveRules
+			fmt.Println(ruleIds)
 			inv.ConsultAxioms()
 			mc := marco.NewMarco(ruleIds, inv.Satisfiable)
 			mc.Run()
+
 			errors = mc.Analysis()
 			if len(errors) == 1 && len(errors[0].CriticalNodes) == 0 {
 				fmt.Printf("No solutions: %v\n", errors)
@@ -109,10 +116,15 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			fmt.Println("Solutions found")
+			fmt.Println("MUSes: ")
+
+			for _, mus := range mc.MUSs {
+				fmt.Println(mus)
+			}
+
 			break
 		} else {
 			fmt.Println("No type error")
-
 			break
 		}
 	}

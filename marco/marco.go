@@ -3,15 +3,15 @@ package marco
 import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
-	"mil/graph"
+	"goanna/graph"
 )
 
 type IntSet mapset.Set[int]
 
 type Cause struct {
-	MCS  IntSet
-	MSS  IntSet
-	Type any
+	MCS IntSet
+	MSS IntSet
+	//Type any
 }
 
 type Error struct {
@@ -187,7 +187,7 @@ func (m *Marco) Analysis() []Error {
 		causes := make([]Cause, len(mcsList))
 
 		for i, mcs := range mcsList {
-			causes[i] = Cause{mcs, NewIntSet(), nil}
+			causes[i] = Cause{mcs, NewIntSet()}
 		}
 
 		errors = append(errors, Error{

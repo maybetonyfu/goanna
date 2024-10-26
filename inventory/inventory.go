@@ -3,7 +3,7 @@ package inventory
 import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
-	"mil/prolog-tool"
+	"goanna/prolog-tool"
 	"slices"
 	"strings"
 )
@@ -71,6 +71,7 @@ type Inventory struct {
 	TypingRules    map[string][]Rule
 	InstanceRules  map[string]map[int][]string
 	logic          *prolog_tool.Logic
+	changedNames   []string
 }
 
 func (inv *Inventory) getVarClasses() map[string][]VarClass {
@@ -123,6 +124,7 @@ func NewInventory(input Input) *Inventory {
 		TypingRules:    tyingRules,
 		InstanceRules:  instanceRules,
 		logic:          prolog_tool.NewProlog(),
+		changedNames:   make([]string, 0),
 	}
 }
 
@@ -162,6 +164,8 @@ func (inv *Inventory) Generalize(currentLevel int) {
 	slices.Sort(effectiveRules)
 	inv.AxiomaticRules = axiomRules
 	inv.EffectiveRules = effectiveRules
+	inv.changedNames = inv.findDeclarationsByRules(effectiveRules)
+
 }
 
 func (inv *Inventory) RenderTypeChecking() string {
@@ -425,10 +429,8 @@ func (inv *Inventory) ConsultAxioms() {
 }
 
 func (inv *Inventory) Satisfiable(rules []int) bool {
-	changedNames := inv.findDeclarationsByRules(rules)
-	typingRules := inv.renderChangedTypingRules(changedNames, rules)
-
-	for _, name := range changedNames {
+	typingRules := inv.renderChangedTypingRules(inv.changedNames, rules)
+	for _, name := range inv.changedNames {
 		inv.logic.Abolish(name, 6)
 	}
 

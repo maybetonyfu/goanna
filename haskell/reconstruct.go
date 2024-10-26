@@ -3,8 +3,8 @@ package haskell
 import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
-	"mil/inventory"
-	prolog_tool "mil/prolog-tool"
+	"goanna/inventory"
+	prolog_tool "goanna/prolog-tool"
 	"slices"
 	"strings"
 	"text/template"
