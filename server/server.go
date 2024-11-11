@@ -202,7 +202,7 @@ func getHaskellFile(r *http.Request) (string, error) {
 
 func parseHaskellFile(text string) (inventory.Input, error) {
 	resp, err := http.Post(
-		"http://localhost:8000/translate",
+		"http://localhost:8090/translate",
 		"text/plain",
 		strings.NewReader(text))
 	if err != nil {
@@ -233,5 +233,5 @@ func parseHaskellFile(text string) (inventory.Input, error) {
 func main() {
 	http.HandleFunc("/prolog", renderProlog)
 	http.HandleFunc("/typecheck", typeCheck)
-	_ = http.ListenAndServe(":8090", nil)
+	_ = http.ListenAndServe(":8080", nil)
 }

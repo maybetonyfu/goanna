@@ -2,7 +2,7 @@
 
 ./goanna &
 
-fastapi run web.py &
+fastapi run web.py --port 8090 &
 
 wait -n
 
