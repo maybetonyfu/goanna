@@ -165,6 +165,22 @@ def update_vendors(module_mapping: dict[str, str], module_name: str, data: list[
         case ExpDo(stmts=stmts):
             end = ast.loc[1]
             for stmt in stmts:
+                if isinstance(stmt, Generator):
+                    start = stmt.loc[0]
+                    line = start[0]
+                    column = start[1]
+                    effective_range = EffectiveRange(ranges=(start, end), excludes=[])
+                    for name, id in names_from_pat(stmt.pat):
+                        canonical_name = f'{module_mapping[module_name]}_{encode(name)}_{line}_{column}'
+                        data.append(Vendor(
+                            node_id=id,
+                            name=name,
+                            type='term',
+                            module=module_name,
+                            canonical_name=canonical_name,
+                            effective_range=effective_range,
+                        ))
+
                 if isinstance(stmt, LetStmt):
                     for bind in stmt.binds:
                         if isinstance(bind, PatBind):
@@ -335,6 +351,10 @@ def allocate_buyers(vendors: list[Vendor], buyers: list[Buyer], import_map: dict
                     new_buyers.append(buyer)
                 case 'Float':
                     buyer.canonical_name = 'builtin_Float'
+                    buyer.module = 'builtin'
+                    new_buyers.append(buyer)
+                case 'list':
+                    buyer.canonical_name = 'list'
                     buyer.module = 'builtin'
                     new_buyers.append(buyer)
                 case _:

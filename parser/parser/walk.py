@@ -336,6 +336,10 @@ def match_type(node: Node, env: ParseEnv) -> Ty:
         case "list":
             ty = match_type(node.child_by_field_name("element"), env)
             return TyList(id=env.new_id(), loc=make_loc(node), ty=ty)
+
+        case "prefix_list":
+            return TyCon(id=env.new_id(), loc=make_loc(node), name="list", canonical_name=None, module=None)
+
         case _:
             raise HaskellParsingError(make_loc(node))
 
@@ -486,8 +490,8 @@ def parse_haskell(code: str) -> Node:
 
 if __name__ == "__main__":
     tree = parse_haskell("""
-x :: [Char]
-x = '4'
+instance Monad Maybe
+instance Monad []
 """)
     print(tree)
     # query = haskell_language.query('(ERROR) @parsing_error')

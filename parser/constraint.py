@@ -33,7 +33,7 @@ class ConstraintGenState:
         return self.global_state.get_declarations()
 
     def add_rule(self, rule: LTerm, head: RuleHead, node_id: int):
-        self.global_state.add_rule(Rule(head=head, body=rule, axiom=False, node_id=node_id, ))
+        self.global_state.add_rule(Rule(head=head, body=rule, axiom=False, node_id=node_id))
 
     def add_axiom(self, rule: LTerm, head: RuleHead):
         self.global_state.add_rule(Rule(head=head, body=rule, axiom=True, node_id=None))
@@ -343,6 +343,39 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
 
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
+
+        case ExpDo(stmts=stmts):
+            m = state.fresh()
+            a = state.fresh()
+            rule_body = LStruct(functor='member',
+                                args=[LStruct(functor='with', args=[LAtom(value='p_Monad'), m]),
+                                      LVar(value='Classes')])
+            state.add_axiom(once(rule_body), head)
+            state.add_rule(unify(node_var(ast), pair(m, a)), head, ast.id)
+
+            for stmt in stmts[0:-1]:
+                monad_var = pair(m, wildcard)
+                state.add_axiom(unify(node_var(stmt), monad_var), head)
+                generate_constraint(stmt, head, state)
+
+            last_stmt = stmts[-1]
+            state.add_axiom(unify(node_var(last_stmt), pair(m, a)), head)
+            generate_constraint(last_stmt, head, state)
+
+        case Generator(pat=pat, exp=exp):
+            monad_var = pair(wildcard, node_var(pat))
+            state.add_rule(unify(node_var(ast), node_var(exp)), head, ast.id)
+            state.add_axiom(unify(monad_var, node_var(exp)), head)
+            generate_constraint(exp, head, state)
+            generate_constraint(pat, head, state)
+
+        case Qualifier(exp=exp):
+            state.add_rule(unify(node_var(ast), node_var(exp)), head, ast.id)
+            generate_constraint(exp, head, state)
+
+        case LetStmt(binds=binds):
+            for decl in binds:
+                generate_constraint(decl, head, state)
 
         case LitInt():
             state.add_rule(unify(node_var(ast), 'builtin_Int'), head, ast.id)

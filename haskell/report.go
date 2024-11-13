@@ -154,7 +154,8 @@ func getDisplayName(loc inventory.Range, file string) string {
 	if loc.FromLine != loc.ToLine {
 		fromLine := lines[loc.FromLine]
 		toLine := lines[loc.ToLine]
-		start := fromLine[loc.FromCol : loc.FromCol+4]
+		startCutOffCol := min(loc.FromCol+4, len(fromLine))
+		start := fromLine[loc.FromCol:startCutOffCol]
 		var end string
 		if loc.ToCol < 4 {
 			end = toLine[0:loc.ToCol]
@@ -175,7 +176,6 @@ func getDisplayName(loc inventory.Range, file string) string {
 		return line[loc.FromCol:loc.ToCol]
 
 	}
-
 }
 
 func InferTypes(inv inventory.Inventory) map[string]string {

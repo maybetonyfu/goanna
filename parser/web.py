@@ -1,8 +1,5 @@
 
 from fastapi import FastAPI, Body
-from fastapi.middleware.cors import CORSMiddleware
-import time
-from starlette.staticfiles import StaticFiles
 from state import InventoryInput, NodeRange, Identifier
 from system import static_analysis, parse_modules, run_modules
 
@@ -97,12 +94,15 @@ return :: Monad m => a -> m a
 
 instance Functor Maybe
 instance Functor IO
+instance Functor []
 
 instance Applicative Maybe
 instance Applicative IO
+instance Applicative []
 
 instance Monad Maybe
 instance Monad IO
+instance Monad []
 
 class Monoid a 
 
@@ -160,6 +160,19 @@ floor :: Num a => a -> Int
 ceiling :: Num a => a -> Int
 '''
 
+prelude_monad_minimal = '''
+data Maybe a = Nothing | Just a
+data Bool = True | False
+
+class Monad m
+
+(>>) :: Monad m => m a -> m b -> m b
+(>>=) :: Monad m => m a -> (a -> m b) -> m b
+return :: Monad m => a -> m a
+
+instance Monad Maybe
+
+'''
 no_prelude = ''
 
 @app.post("/translate")
