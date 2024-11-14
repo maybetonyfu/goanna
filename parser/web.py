@@ -96,16 +96,19 @@ instance Functor Maybe
 instance Functor IO
 instance Functor []
 instance Functor ((,) a)
+instance Functor ((,,) a b)
 
 instance Applicative Maybe
 instance Applicative IO
 instance Applicative []
 instance Applicative ((,) a)
+instance Applicative ((,,) a b)
 
 instance Monad Maybe
 instance Monad IO
 instance Monad []
 instance Monad ((,) a)
+instance Monad ((,,) a b)
 
 class Monoid a 
 
@@ -180,7 +183,7 @@ no_prelude = ''
 
 @app.post("/translate")
 async def translate(body: str = Body()):
-    state = run_modules([('Main', body), ('Prelude',  no_prelude)])
+    state = run_modules([('Main', body), ('Prelude',  prelude)])
     inventory_input = InventoryInput(
         base_modules=["Prelude"],
         declarations=state.declarations,
