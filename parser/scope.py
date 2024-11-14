@@ -353,8 +353,12 @@ def allocate_buyers(vendors: list[Vendor], buyers: list[Buyer], import_map: dict
                     buyer.canonical_name = 'builtin_Float'
                     buyer.module = 'builtin'
                     new_buyers.append(buyer)
-                case 'list':
+                case 'list': # List Type Constructor []
                     buyer.canonical_name = 'list'
+                    buyer.module = 'builtin'
+                    new_buyers.append(buyer)
+                case 'tuple': # Tuple Type Constructor (,)
+                    buyer.canonical_name = 'tuple'
                     buyer.module = 'builtin'
                     new_buyers.append(buyer)
                 case _:

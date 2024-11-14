@@ -135,7 +135,7 @@ class Traverse:
                 ast.binds = [self.traverse(decl, ast) for decl in decls]
 
             # Types
-            case TyVar() | TyCon():
+            case TyVar() | TyCon() | TyPrefixList() | TyPrefixTuple():
                 pass
             case TyApp(ty1=ty1, ty2=ty2):
                 ast.ty1 = self.traverse(ty1, ast)

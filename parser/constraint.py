@@ -266,6 +266,15 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             for ty in tys:
                 generate_constraint(ty, head, state)
 
+        case TyPrefixList():
+            state.add_rule(unify(node_var(ast), LAtom(value='list')), head, ast.id)
+
+        case TyPrefixTuple(arity=arity):
+            if arity == 2:
+                state.add_rule(unify(node_var(ast), LAtom(value='tuple')), head, ast.id)
+            if arity == 3:
+                pass
+
         case ExpApp(exp1=exp1, exp2=exp2):
             generate_constraint(exp1, head, state)
             generate_constraint(exp2, head, state)

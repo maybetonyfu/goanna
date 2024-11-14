@@ -81,9 +81,9 @@ min,max :: Ord a => a -> a -> a
 length :: [a] -> Int
 id :: a -> a
 
-class Functor f 
-class Applicative f 
-class Monad m 
+class Functor f
+class Functor f => Applicative f 
+class Applicative m => Monad m 
 
 fmap :: Functor f => (a -> b) -> f a -> f b  
 pure :: Applicative f => a -> f a
@@ -95,14 +95,17 @@ return :: Monad m => a -> m a
 instance Functor Maybe
 instance Functor IO
 instance Functor []
+instance Functor ((,) a)
 
 instance Applicative Maybe
 instance Applicative IO
 instance Applicative []
+instance Applicative ((,) a)
 
 instance Monad Maybe
 instance Monad IO
 instance Monad []
+instance Monad ((,) a)
 
 class Monoid a 
 
@@ -177,7 +180,7 @@ no_prelude = ''
 
 @app.post("/translate")
 async def translate(body: str = Body()):
-    state = run_modules([('Main', body), ('Prelude',  prelude)])
+    state = run_modules([('Main', body), ('Prelude',  no_prelude)])
     inventory_input = InventoryInput(
         base_modules=["Prelude"],
         declarations=state.declarations,
