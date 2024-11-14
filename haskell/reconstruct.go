@@ -14,7 +14,6 @@ type constructorType int
 
 const (
 	function constructorType = iota
-	tuple
 	list
 	adt
 	unknown
@@ -95,8 +94,6 @@ func makePair(term prolog_tool.Term) Pair {
 			switch firstArgC.Value {
 			case "function":
 				return Pair{function, firstArgCArg, secondArg}
-			case "tuple":
-				return Pair{tuple, firstArgCArg, secondArg}
 			default:
 				return Pair{adt, firstArg, secondArg}
 			}
@@ -129,19 +126,6 @@ func unrollFunction(term prolog_tool.Term) []prolog_tool.Term {
 	}
 }
 
-func unrollTuple(term prolog_tool.Term) []prolog_tool.Term {
-	pair := makePair(term)
-	if pair.conType == tuple {
-		return slices.Concat([]prolog_tool.Term{
-			pair.first,
-		}, unrollTuple(pair.second))
-	} else {
-		return []prolog_tool.Term{
-			term,
-		}
-	}
-}
-
 func unrollADT(term prolog_tool.Term) []prolog_tool.Term {
 	pair := makePair(term)
 	if pair.conType == adt {
@@ -160,6 +144,15 @@ func (p *Printer) printAtom(term prolog_tool.Atom) string {
 		return parts[0]
 	} else {
 		return parts[len(parts)-1]
+	}
+}
+
+func adtIsTuple(term prolog_tool.Term) bool {
+	switch t := term.(type) {
+	case prolog_tool.Atom:
+		return t.Value == "tuple"
+	default:
+		return false
 	}
 }
 
@@ -201,15 +194,17 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 	case makePair(term).conType == list:
 		content := makePair(term).first
 		return "[" + p.PrintTerm(content) + "]"
-	case makePair(term).conType == tuple:
-		args := unrollTuple(term)
-		argsText := make([]string, len(args))
-		for i, arg := range args {
-			argsText[i] = p.PrintTerm(arg)
-		}
-		return "(" + strings.Join(argsText, ",") + ")"
+
 	case makePair(term).conType == adt:
 		args := unrollADT(term)
+		if adtIsTuple(args[0]) {
+			tupleElems := args[1:]
+			argsText := make([]string, len(tupleElems))
+			for i, elem := range tupleElems {
+				argsText[i] = p.PrintTerm(elem)
+			}
+			return "(" + strings.Join(argsText, ",") + ")"
+		}
 		argsText := make([]string, len(args))
 		for i, arg := range args {
 			if makePair(arg).conType == adt {

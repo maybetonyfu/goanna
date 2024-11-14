@@ -1,5 +1,4 @@
 from typing import cast
-
 from logic import *
 from parser.syntax import *
 from state import *
@@ -73,14 +72,26 @@ def fun_of(*terms: LTerm) -> LTerm:
             return pair(LStruct(functor='function', args=[terms[0]]), fun_of(*terms[1:]))
 
 
+# either a b -> ((either a)  b)
+# maybe a -> (maybe a)
+# [a] -> ([] a)
+# (a, b) -> ((tuple a) b)
+# (a, b, c) -> (((tuple a) b) c)
+# a -> b -> ((function a) b)
+# a -> b -> c => ((function a) ((function b) c))
+
 def tuple_of(*terms: LTerm) -> LTerm:
+
+
     match len(terms):
         case 0:
             raise ValueError("tuple_of needs at least one argument")
         case 1:
-            return terms[0]
+            return pair(LAtom(value='tuple'), terms[0])
         case _:
-            return pair(LStruct(functor='tuple', args=[terms[0]]), tuple_of(*terms[1:]))
+            last_item = terms[-1]
+            init_items = terms[:-1]
+            return pair(tuple_of(*init_items), last_item)
 
 
 def type_of(name: str, var: LVar, captures: LVar, arguments: LVar) -> LStruct:
@@ -270,10 +281,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             state.add_rule(unify(node_var(ast), LAtom(value='list')), head, ast.id)
 
         case TyPrefixTuple(arity=arity):
-            if arity == 2:
-                state.add_rule(unify(node_var(ast), LAtom(value='tuple')), head, ast.id)
-            if arity == 3:
-                pass
+            state.add_rule(unify(node_var(ast), LAtom(value='tuple')), head, ast.id)
 
         case ExpApp(exp1=exp1, exp2=exp2):
             generate_constraint(exp1, head, state)
