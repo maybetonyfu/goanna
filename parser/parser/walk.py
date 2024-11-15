@@ -1,7 +1,5 @@
 from collections import deque
 from typing import cast
-from unittest import case
-
 import tree_sitter_haskell as haskell
 from funcy import first
 from tree_sitter import Language, Parser, Node
@@ -13,6 +11,48 @@ haskell_language = Language(haskell.language())
 parser = Parser(haskell_language)
 
 parsing_error_query = haskell_language.query('(ERROR) @parsing_error')
+
+fixities = {
+    "." : 9,
+    "$" : 0,
+    "==" : 4,
+    "/=" : 4,
+    "<" : 4,
+    ">" : 4,
+    "<=" : 4,
+    ">=": 4,
+    "&&" : 3,
+    "||" : 2,
+    "++" : 5,
+    "<*>" : 4,
+    ">>": 1,
+    ">>=": 1,
+    "+": 6,
+    "-": 6,
+    "*" : 7,
+    "/" : 7,
+}
+
+associativity ={
+    ".": 'r',
+    "$": 'r',
+    "==": 'l',
+    "/=": 'l',
+    "<": 'l',
+    ">": 'l',
+    "<=": 'l',
+    ">=": 'l',
+    "&&": 'r',
+    "||": 'r',
+    "++": 'r',
+    "<*>": 'l',
+    ">>": 'l',
+    ">>=": 'l',
+    "+": 'l',
+    "-": 'l',
+    "*": 'l',
+    "/": 'l',
+}
 
 
 def make_loc(nd: Node) -> Range:
@@ -95,8 +135,8 @@ def match_pat(node: Node, env: ParseEnv) -> Pat:
             return PApp(id=env.new_id(), loc=make_loc(node), name=pats[0].name, pats=pats[1:], canonical_name=None,
                         module=pats[0].module)
         case "infix":
-            left_operand = match_pat(node.child_by_field_name("left_operand"), env)
-            right_operand = match_pat(node.child_by_field_name("right_operand"), env)
+
+
             operator_node = node.child_by_field_name("operator")
             operator = None
             module = None
@@ -107,8 +147,12 @@ def match_pat(node: Node, env: ParseEnv) -> Pat:
                 module = get_text(operator_node.child_by_field_name("module"))
             elif operator_node.type == 'constructor_operator':
                 operator = get_text(operator_node)
+
+
+            left_operand = match_pat(node.child_by_field_name("left_operand"), env)
+            right_operand = match_pat(node.child_by_field_name("right_operand"), env)
             return PInfix(id=env.new_id(), loc=make_loc(node), pat1=left_operand, pat2=right_operand, name=operator,
-                          canonical_name=None, module=module)
+                      canonical_name=None, module=module)
 
         case "list":
             pats = [match_pat(child, env) for child in node.children_by_field_name("element")]
@@ -119,6 +163,10 @@ def match_pat(node: Node, env: ParseEnv) -> Pat:
             raise HaskellParsingError(make_loc(node))
 
 
+
+
+
+
 def match_alt(node: Node, env: ParseEnv) -> Alt:
     pat = match_pat(node.child_by_field_name("pattern"), env)
     exp = match_exp(node.child_by_field_name("match").child_by_field_name('expression'), env)
@@ -126,6 +174,8 @@ def match_alt(node: Node, env: ParseEnv) -> Alt:
     decl_nodes = [] if bind_node is None else bind_node.children_by_field_name("decl")
     decls = [match_decl(child, env) for child in decl_nodes]
     return Alt(id=env.new_id(), loc=make_loc(node), pat=pat, exp=exp, binds=decls)
+
+
 
 
 def match_exp(node: Node, env: ParseEnv) -> Exp:
@@ -161,35 +211,15 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
             return ExpApp(id=env.new_id(), loc=make_loc(node), exp1=match_exp(node.child(0), env),
                           exp2=match_exp(node.child(1), env))
 
-        case "infix":
-            operator_node = node.child_by_field_name("operator")
-            left_operand = match_exp(node.child_by_field_name("left_operand"), env)
-            right_operand = match_exp(node.child_by_field_name("right_operand"), env)
-            operator = ''
-            module = None
-            if operator_node.type == 'constructor_operator' or operator_node.type == 'operator':
-                operator = get_text(operator_node)
-            elif operator_node.type == 'qualified':
-                operator = get_text(operator_node.child_by_field_name("id"))
-                module = get_text(operator_node.child_by_field_name("module"))
-            elif operator_node.type == 'infix_id':
-                back_stick_operator = operator_node.named_child(0)
-                if back_stick_operator.type == 'variable' or back_stick_operator.type == 'constructor_operator':
-                    operator = get_text(back_stick_operator)
-                elif back_stick_operator.type == 'qualified':
-                    operator = get_text(back_stick_operator.child_by_field_name("id"))
-                    module = get_text(back_stick_operator.child_by_field_name("module"))
-            return ExpInfixApp(id=env.new_id(), loc=make_loc(node), exp1=left_operand, name=operator, module=module,
-                               canonical_name=None, exp2=right_operand)
-
         case "left_section":
             left_operand = node.child_by_field_name("left_operand")
             operator = node.child_by_field_name("operator")
             left = match_exp(left_operand, env)
             op = match_exp(operator, env)
             return ExpLeftSection(id=env.new_id(), loc=make_loc(node), left=left, op=op)
+
         case "right_section":
-            operator = node.child_by_field_name("operator")
+            operator = node.child(1)
             right_operand = node.child_by_field_name("right_operand")
             right = match_exp(right_operand, env)
             op = match_exp(operator, env)
@@ -262,8 +292,80 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
         case "literal":
             return match_literal(node.named_child(0), env)
 
+        case "infix":
+            lhs = match_exp(node.child_by_field_name("left_operand"), env)
+            return match_infix(node, lhs, env)
+
         case _:
              raise HaskellParsingError(make_loc(node))
+
+def get_infix_fixity (node: Node) -> int:
+    operator_node = node.child_by_field_name("operator")
+    operator = get_text(operator_node)
+    if operator in fixities.keys():
+        return fixities[operator]
+    else:
+        return 9
+
+def get_operator_name(node: Node) -> str:
+    operator = ''
+    operator_node = node.child_by_field_name("operator")
+    if operator_node.type == 'constructor_operator' or operator_node.type == 'operator':
+        operator = get_text(operator_node)
+    elif operator_node.type == 'qualified':
+        operator = get_text(operator_node.child_by_field_name("id"))
+    elif operator_node.type == 'infix_id':
+        back_stick_operator = operator_node.named_child(0)
+        if back_stick_operator.type == 'variable' or back_stick_operator.type == 'constructor_operator':
+            operator = get_text(back_stick_operator)
+        elif back_stick_operator.type == 'qualified':
+            operator = get_text(back_stick_operator.child_by_field_name("id"))
+    return operator
+
+def get_operator_module_name(node: Node) -> str | None:
+    module = None
+    operator_node = node.child_by_field_name("operator")
+
+    if operator_node.type == 'qualified':
+        module = get_text(operator_node.child_by_field_name("module"))
+    elif operator_node.type == 'infix_id':
+        back_stick_operator = operator_node.named_child(0)
+        if back_stick_operator.type == 'qualified':
+            module = get_text(back_stick_operator.child_by_field_name("module"))
+    return module
+
+def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
+    rhs_node = node.child_by_field_name("right_operand")
+
+    left_priority = rhs_node.type == "infix" and get_infix_fixity(rhs_node) < get_infix_fixity(node)
+    right_associative = rhs_node.type == "infix"  and get_operator_name(rhs_node) == get_operator_name(node) and associativity.get(get_operator_name(node)) == 'r'
+    if left_priority or right_associative:
+            # 4 * 1 + 1 $ z
+            _lhs = ExpInfixApp(
+                loc=(lhs.loc[0], make_loc(rhs_node.child_by_field_name("left_operand"))[1]),
+                id=env.new_id(),
+                exp1=lhs,
+                exp2=match_exp(rhs_node.child_by_field_name("left_operand"), env),
+                name=get_operator_name(node),
+                module=get_operator_module_name(node),
+                canonical_name=None,
+            )
+            return match_infix(rhs_node, _lhs, env)
+    else:
+            # a $ 1 + 2
+            right_operand = match_exp(node.child_by_field_name("right_operand"), env)
+            return ExpInfixApp(id=env.new_id(),
+                               loc=make_loc(node),
+                               exp1=lhs,
+                               name=get_operator_name(node),
+                               module=get_operator_module_name(node),
+                               canonical_name=None,
+                               exp2=right_operand)
+
+
+
+
+
 
 
 def match_rhs(node: Node, env: ParseEnv) -> Rhs:
@@ -450,7 +552,8 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
             pat = match_pat(variable_node, env)
             rhs = match_rhs(node, env)
             return PatBind(id=env.new_id(), loc=make_loc(node), pat=pat, rhs=rhs)
-
+        case "fixity":
+            pass
         case _:
             raise HaskellParsingError(make_loc(node))
 
@@ -494,8 +597,9 @@ def parse_haskell(code: str) -> Node:
 
 if __name__ == "__main__":
     tree = parse_haskell("""
-instance Monad ((,) a)
-instance Monad ((,,) a b)
+
+x = (3==)
+
 """)
     print(tree)
     # query = haskell_language.query('(ERROR) @parsing_error')
@@ -505,3 +609,4 @@ instance Monad ((,,) a b)
     # print('missing: ', missings)
     ast = make_ast(tree, ParseEnv(), 'Test')
     print(ast)
+

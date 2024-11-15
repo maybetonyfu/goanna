@@ -73,7 +73,7 @@ instance Ord Float
 instance Ord Char 
 instance Ord Bool
 
-(==), (!=) :: Eq a => a -> a -> Bool
+(==), (/=) :: Eq a => a -> a -> Bool
 (>),(<), (>=), (<=) :: Ord a => a -> a -> Bool
 compare :: Ord a => a -> a -> Ordering
 min,max :: Ord a => a -> a -> a
@@ -164,6 +164,8 @@ sqrt :: Float -> Float
 (^) :: Num a => a -> Int -> a
 floor :: Num a => a -> Int
 ceiling :: Num a => a -> Int
+($) :: (a -> b) -> a -> b
+(.) :: (b -> c) -> (a -> b) -> a -> c
 '''
 
 prelude_monad_minimal = '''
