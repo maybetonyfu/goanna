@@ -44,7 +44,6 @@ def parse_modules(files: list[tuple[str, str]]) -> State:
     if state.parsing_errors:
         return state
     vendors = get_vendors(asts, state)
-
     buyers = get_buyers(asts)
     buyers, import_errors = allocate_buyers(vendors, buyers, import_map)
     state.import_errors = import_errors
@@ -89,3 +88,18 @@ def run_modules(files: list[tuple[str, str]]) -> State:
 
     state = static_analysis(state)
     return state
+
+
+if __name__ == '__main__':
+    state = parse_modules([('Main.hs', "x = [y | z <- [1,2,3]]")])
+    print(state.asts[0])
+
+
+# Module(name='Main.hs', decls=[
+#     PatBind(pat=PVar(name='x', canonical_name='m0_x'),
+#             rhs=UnguardedRhs(
+#                 exp=ExpComprehension(
+#                     exp=ExpList(exps=[LitInt(), LitInt(), LitInt()]),
+#                     quantifiers=[Generator(pat=PVar(name='z', canonical_name='m0_z_0_4'), exp=ExpList(exps=[LitInt(), LitInt(), LitInt()]))],
+#                     guards=[]), wheres=[]))],
+#        imports=['Prelude'])

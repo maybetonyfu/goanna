@@ -81,8 +81,6 @@ def fun_of(*terms: LTerm) -> LTerm:
 # a -> b -> c => ((function a) ((function b) c))
 
 def tuple_of(*terms: LTerm) -> LTerm:
-
-
     match len(terms):
         case 0:
             raise ValueError("tuple_of needs at least one argument")
@@ -227,7 +225,6 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 state.add_rule(type_of(canonical_name, v, wildcard, wildcard), head, ast.id)
 
         case PTuple(pats=pats):
-
             state.add_axiom(unify(node_var(ast), tuple_of(*[node_var(pat) for pat in pats])), head)
             for pat in pats:
                 generate_constraint(pat, head, state)
@@ -288,6 +285,25 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             generate_constraint(exp2, head, state)
             fun = fun_of(node_var(exp2), node_var(ast))
             state.add_rule(unify(fun, node_var(exp1)), head, ast.id)
+
+        case ExpLeftSection(left=left, op=op):
+            arg = state.fresh()
+            result = state.fresh()
+            fun = fun_of(node_var(left), arg, result)
+            state.add_axiom(unify(fun, node_var(op)), head)
+            state.add_rule(unify(node_var(ast), fun_of(arg, result)), head, ast.id)
+            generate_constraint(left, head, state)
+            generate_constraint(op, head, state)
+
+        case ExpRightSection(right=right, op=op):
+            # (==2)
+            arg = state.fresh()
+            result = state.fresh()
+            fun = fun_of(arg, node_var(right), result)
+            state.add_axiom(unify(fun, node_var(op)), head)
+            state.add_rule(unify(node_var(ast), fun_of(arg, result)), head, ast.id)
+            generate_constraint(right, head, state)
+            generate_constraint(op, head, state)
 
         case ExpInfixApp(exp1=exp1, exp2=exp2, canonical_name=canonical_name):
             fun = fun_of(node_var(exp1), node_var(exp2), node_var(ast))
@@ -361,28 +377,64 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
 
+        case ExpEnumTo(exp=exp) | ExpEnumFrom(exp=exp):
+            state.add_rule(unify(node_var(ast), list_of(node_var(exp))), head, ast.id)
+            rule_body = LStruct(functor='member',
+                                args=[LStruct(functor='with', args=[LAtom(value='p_Enum'), node_var(exp)]),
+                                      LVar(value='Classes')])
+            state.add_rule(once(rule_body), head, ast.id)
+            generate_constraint(exp, head, state)
+
+        case ExpEnumFromTo(exp1=exp1, exp2=exp2):
+            state.add_rule(unify_all([node_var(ast), list_of(node_var(exp1)), list_of(node_var(exp2))]), head, ast.id)
+            rule_body1 = LStruct(functor='member',
+                                args=[LStruct(functor='with', args=[LAtom(value='p_Enum'), node_var(exp1)]),
+                                      LVar(value='Classes')])
+            rule_body2 = LStruct(functor='member',
+                                 args=[LStruct(functor='with', args=[LAtom(value='p_Enum'), node_var(exp2)]),
+                                       LVar(value='Classes')])
+            state.add_rule(once(rule_body1), head, ast.id)
+            state.add_rule(once(rule_body2), head, ast.id)
+            generate_constraint(exp1, head, state)
+            generate_constraint(exp2, head, state)
+
+        case ExpComprehension(exp=exp, quantifiers=quantifiers, guards=guards):
+            for quantifier in quantifiers:
+                quantifier = cast(Generator, quantifier)
+                pat = quantifier.pat
+                rhs = quantifier.exp
+                state.add_rule(unify(list_of(node_var(pat)), node_var(rhs)), head, ast.id)
+                generate_constraint(pat, head, state)
+                generate_constraint(rhs, head, state)
+
+            state.add_rule(unify(node_var(ast), list_of(node_var(exp))), head, ast.id)
+            generate_constraint(exp, head, state)
+            for guard in guards:
+                state.add_rule(unify(node_var(guard), LAtom(value='p_Bool')), head, ast.id)
+                generate_constraint(guard, head, state)
+
         case ExpDo(stmts=stmts):
             m = state.fresh()
             a = state.fresh()
             rule_body = LStruct(functor='member',
                                 args=[LStruct(functor='with', args=[LAtom(value='p_Monad'), m]),
                                       LVar(value='Classes')])
-            state.add_axiom(once(rule_body), head)
+            state.add_rule(once(rule_body), head, ast.id)
             state.add_rule(unify(node_var(ast), pair(m, a)), head, ast.id)
 
             for stmt in stmts[0:-1]:
                 monad_var = pair(m, wildcard)
-                state.add_axiom(unify(node_var(stmt), monad_var), head)
+                state.add_rule(unify(node_var(stmt), monad_var), head, ast.id)
                 generate_constraint(stmt, head, state)
 
             last_stmt = stmts[-1]
-            state.add_axiom(unify(node_var(last_stmt), pair(m, a)), head)
+            state.add_rule(unify(node_var(last_stmt), pair(m, a)), head, ast.id)
             generate_constraint(last_stmt, head, state)
 
         case Generator(pat=pat, exp=exp):
             monad_var = pair(wildcard, node_var(pat))
             state.add_rule(unify(node_var(ast), node_var(exp)), head, ast.id)
-            state.add_axiom(unify(monad_var, node_var(exp)), head)
+            state.add_rule(unify(monad_var, node_var(exp)), head, ast.id)
             generate_constraint(exp, head, state)
             generate_constraint(pat, head, state)
 

@@ -47,7 +47,11 @@ Ty = Union['TyCon', 'TyApp', 'TyFun', 'TyTuple', 'TyList', 'TyVar', 'TyForall', 
 
 Exp = Union['ExpVar', 'ExpCon', 'Lit',  # 'ExpLit', Use lit to simplify
 'ExpApp', 'ExpInfixApp',  # Added this
-'ExpLambda', 'ExpLet', 'ExpIf', 'ExpCase', 'ExpDo', 'ExpTuple', 'ExpList', 'ExpLeftSection', 'ExpRightSection', 'ExpEnumFrom', 'ExpEnumTo', 'ExpEnumFromTo']
+'ExpLambda', 'ExpLet', 'ExpIf', 'ExpCase', 'ExpDo',
+'ExpTuple', 'ExpList', 'ExpLeftSection', 'ExpRightSection',
+'ExpEnumFrom', 'ExpEnumTo', 'ExpEnumFromTo',
+'ExpComprehension'
+]
 
 Stmt = Union['Generator', 'Qualifier', 'LetStmt']
 
@@ -331,6 +335,12 @@ class ExpEnumFrom(Pretty):
 @dataclass
 class ExpEnumTo(Pretty):
     exp: Exp
+
+@dataclass
+class ExpComprehension(Pretty):
+    exp: Exp
+    quantifiers: list[Generator]
+    guards: list[Exp]
 
 # Misc
 @dataclass

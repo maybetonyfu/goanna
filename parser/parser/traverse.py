@@ -26,7 +26,6 @@ class Traverse:
             self.traverse(ast)
 
     def traverse(self, ast: Pretty, parent: Pretty = None) -> Pretty:
-
         self.data = self.update(self.data, ast, parent)
 
         match ast:
@@ -121,9 +120,15 @@ class Traverse:
                 ast.exp = self.traverse(exp, ast)
             case ExpEnumTo(exp=exp):
                 ast.exp = self.traverse(exp, ast)
+
             case ExpEnumFromTo(exp1=exp1, exp2=exp2):
                 ast.exp1 = self.traverse(exp1, ast)
                 ast.exp2 = self.traverse(exp2, ast)
+
+            case ExpComprehension(exp=exp, quantifiers=quantifiers, guards=guards):
+                ast.exp = self.traverse(exp, ast)
+                ast.quantifiers = [self.traverse(quantifier, ast) for quantifier in quantifiers]
+                ast.guards = [self.traverse(guard, ast) for guard in guards]
 
             # Statements
             case Generator(exp=exp, pat=pat):

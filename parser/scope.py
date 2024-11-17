@@ -162,6 +162,23 @@ def update_vendors(module_mapping: dict[str, str], module_name: str, data: list[
                 effective_range=GLOBAL,
             ))
 
+        case ExpComprehension(quantifiers=quantifiers):
+            for qualifier in quantifiers:
+                line = ast.loc[0][0]
+                column = ast.loc[0][1]
+                qualifier = cast(Generator, qualifier)
+                effective_range = EffectiveRange(ranges=ast.loc, excludes=[])
+                for name, id in names_from_pat(qualifier.pat):
+                    canonical_name = f'{module_mapping[module_name]}_{encode(name)}_{line}_{column}'
+                    data.append(Vendor(
+                        node_id=id,
+                        name=name,
+                        type='term',
+                        module=module_name,
+                        canonical_name=canonical_name,
+                        effective_range=effective_range,
+                    ))
+
         case ExpDo(stmts=stmts):
             end = ast.loc[1]
             for stmt in stmts:
@@ -353,14 +370,14 @@ def allocate_buyers(vendors: list[Vendor], buyers: list[Buyer], import_map: dict
                     buyer.canonical_name = 'builtin_Float'
                     buyer.module = 'builtin'
                     new_buyers.append(buyer)
-                case 'list': # List Type Constructor []
-                    buyer.canonical_name = 'list'
-                    buyer.module = 'builtin'
-                    new_buyers.append(buyer)
-                case 'tuple': # Tuple Type Constructor (,)
-                    buyer.canonical_name = 'tuple'
-                    buyer.module = 'builtin'
-                    new_buyers.append(buyer)
+                # case 'list': # List Type Constructor []
+                #     buyer.canonical_name = 'list'
+                #     buyer.module = 'builtin'
+                #     new_buyers.append(buyer)
+                # case 'tuple': # Tuple Type Constructor (,)
+                #     buyer.canonical_name = 'tuple'
+                #     buyer.module = 'builtin'
+                #     new_buyers.append(buyer)
                 case _:
                     import_errors.append(buyer)
             continue

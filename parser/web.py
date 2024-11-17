@@ -150,10 +150,17 @@ mod,div :: Int -> Int -> Int
 
 class Enum a 
 enumFrom ::Enum a =>  a -> [a]
+succ :: Enum a => a -> a
+pred :: Enum a => a -> a
+
 instance Enum Int
 instance Enum Char
+instance Enum Bool
+instance Enum Float
+
 any :: [Bool] -> Bool
 and :: [Bool] -> Bool
+
 zip :: [a] -> [b] -> [(a, b)]
 fromIntegral :: Num a => Int -> a
 (/) :: Float -> Float -> Float

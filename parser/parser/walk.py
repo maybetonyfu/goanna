@@ -252,19 +252,19 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
             for child in node.children_by_field_name("statement"):
                 match child.type:
                     case "exp":
-                        qualifier = Qualifier(id=env.new_id(), loc=make_loc(node),
+                        qualifier = Qualifier(id=env.new_id(), loc=make_loc(child),
                                               exp=match_exp(child.named_child(0), env))
                         stmts.append(qualifier)
                     case "bind":
                         pat = match_pat(child.child_by_field_name("pattern"), env)
                         exp_node = child.child_by_field_name("expression")
                         exp = match_exp(exp_node, env)
-                        gen = Generator(id=env.new_id(), loc=make_loc(node), pat=pat, exp=exp)
+                        gen = Generator(id=env.new_id(), loc=make_loc(child), pat=pat, exp=exp)
                         stmts.append(gen)
                     case "let":
                         decls = [match_decl(child, env) for child in
                             child.child_by_field_name('binds').children_by_field_name('decl')]
-                        let = LetStmt(id=env.new_id(), loc=make_loc(node), binds=decls)
+                        let = LetStmt(id=env.new_id(), loc=make_loc(child), binds=decls)
                         stmts.append(let)
             return ExpDo(id=env.new_id(), loc=make_loc(node), stmts=stmts)
         case "tuple":
@@ -288,6 +288,24 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
                 exp1 = match_exp(start, env)
                 exp2 = match_exp(end, env)
                 return ExpEnumFromTo(id=env.new_id(), loc=make_loc(node), exp1=exp1, exp2=exp2)
+
+        case "list_comprehension":
+            exp_node = node.child_by_field_name('expression')
+            print(exp_node)
+            exp = match_exp(exp_node, env)
+            body = node.child_by_field_name('qualifiers').children_by_field_name('qualifier')
+            qualifier_nodes = [q for q in body if q.type == 'generator']
+            guard_nodes = [q.child(0) for q in body if q.type == 'boolean']
+
+            qualifiers = []
+            for gen in qualifier_nodes:
+                pat = match_pat(gen.child_by_field_name("pattern"), env)
+                rhs_node = gen.child_by_field_name("expression")
+                rhs = match_exp(rhs_node, env)
+                generator = Generator(id=env.new_id(), loc=make_loc(gen), pat=pat, exp=rhs)
+                qualifiers.append(generator)
+            guards = [match_exp(g, env) for g in guard_nodes]
+            return ExpComprehension(exp=exp, quantifiers=qualifiers, guards=guards, loc=make_loc(node), id=env.new_id())
 
         case "literal":
             return match_literal(node.named_child(0), env)
@@ -361,11 +379,6 @@ def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
                                module=get_operator_module_name(node),
                                canonical_name=None,
                                exp2=right_operand)
-
-
-
-
-
 
 
 def match_rhs(node: Node, env: ParseEnv) -> Rhs:
@@ -598,7 +611,7 @@ def parse_haskell(code: str) -> Node:
 if __name__ == "__main__":
     tree = parse_haskell("""
 
-x = (3==)
+x = [y | z <- [1,2,3], 1]
 
 """)
     print(tree)

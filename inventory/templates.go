@@ -27,8 +27,9 @@ type_check :-
             {{-  .Name  }}(_, [], _, _, [
                 {{- range .VarClasses -}}
                     has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
-                {{- end -}}], C_{{.Name}}){{ if not .IsLast }},{{ end }}
+                {{- end -}}], C_{{.Name}}),
         {{ end -}}
+		true
     )),
     {{- range . }}
     test_class(C_{{ .Name }}),
