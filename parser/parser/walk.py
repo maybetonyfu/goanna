@@ -4,6 +4,7 @@ import tree_sitter_haskell as haskell
 from funcy import first
 from tree_sitter import Language, Parser, Node
 
+from parser.synonym import translate_synonyms
 from parser.syntax import *
 from state import *
 
@@ -418,23 +419,23 @@ def match_type(node: Node, env: ParseEnv) -> Ty:
         case "qualified":
             module = get_text(node.child_by_field_name("module"))
             ident = node.child_by_field_name("id")
-            return TyCon(id=env.new_id(), loc=make_loc(node), name=get_text(ident), canonical_name=None, module=module)
+            return TyCon(id=env.new_id(), loc=make_loc(node), name=get_text(ident), canonical_name=None, module=module, axiom=False)
         case "context":
             context = match_context(node.child_by_field_name("context"), env)
             ty = match_type(node.child_by_field_name("type"), env)
-            return TyForall(id=env.new_id(), loc=make_loc(node), ty=ty, context=context)
+            return TyForall(id=env.new_id(), loc=make_loc(node), ty=ty, context=context, axiom=False)
         case "unit":
-            return TyCon(id=env.new_id(), loc=make_loc(node), name="Top", canonical_name=None, module=None)
+            return TyCon(id=env.new_id(), loc=make_loc(node), name="Top", canonical_name=None, module=None, axiom=False)
         case "name":
-            return TyCon(id=env.new_id(), loc=make_loc(node), name=get_text(node), canonical_name=None, module=None)
+            return TyCon(id=env.new_id(), loc=make_loc(node), name=get_text(node), canonical_name=None, module=None, axiom=False)
         case "variable":
-            return TyVar(id=env.new_id(), loc=make_loc(node), name=get_text(node), canonical_name=None)
+            return TyVar(id=env.new_id(), loc=make_loc(node), name=get_text(node), canonical_name=None, axiom=False)
         case "apply":
             node1 = node.child_by_field_name("constructor")
             node2 = node.child_by_field_name("argument")
             ty1 = match_type(node1, env)
             ty2 = match_type(node2, env)
-            return TyApp(id=env.new_id(), loc=make_loc(node), ty1=ty1, ty2=ty2)
+            return TyApp(id=env.new_id(), loc=make_loc(node), ty1=ty1, ty2=ty2, axiom=False)
         case "parens":
             return match_type(node.child_by_field_name("type"), env)
         case "function":
@@ -442,15 +443,15 @@ def match_type(node: Node, env: ParseEnv) -> Ty:
             node2 = node.child_by_field_name("result")
             ty1 = match_type(node1, env)
             ty2 = match_type(node2, env)
-            return TyFun(id=env.new_id(), loc=make_loc(node), ty1=ty1, ty2=ty2)
+            return TyFun(id=env.new_id(), loc=make_loc(node), ty1=ty1, ty2=ty2, axiom=False)
 
         case "tuple":
             tys = [match_type(child, env) for child in node.children_by_field_name("element")]
-            return TyTuple(id=env.new_id(), loc=make_loc(node), tys=tys)
+            return TyTuple(id=env.new_id(), loc=make_loc(node), tys=tys, axiom=False)
 
         case "list":
             ty = match_type(node.child_by_field_name("element"), env)
-            return TyList(id=env.new_id(), loc=make_loc(node), ty=ty)
+            return TyList(id=env.new_id(), loc=make_loc(node), ty=ty, axiom=False)
 
         case "prefix_list":
             return TyPrefixList(id=env.new_id(), loc=make_loc(node))
@@ -567,6 +568,12 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
             return PatBind(id=env.new_id(), loc=make_loc(node), pat=pat, rhs=rhs)
         case "fixity":
             pass
+
+        case "type_synomym":
+            d_head = match_decl_head(node, env)
+            target_type = match_type(node.child_by_field_name("type"), env)
+            return TypeDecl(d_head=d_head, ty=target_type, id=env.new_id(), loc=make_loc(node))
+
         case _:
             raise HaskellParsingError(make_loc(node))
 
@@ -611,8 +618,8 @@ def parse_haskell(code: str) -> Node:
 if __name__ == "__main__":
     tree = parse_haskell("""
 
-x = [y | z <- [1,2,3], 1]
-
+type X a b = A a b
+y :: X Int Char
 """)
     print(tree)
     # query = haskell_language.query('(ERROR) @parsing_error')
@@ -620,6 +627,10 @@ x = [y | z <- [1,2,3], 1]
     # print(captures)
     # missings = find_missing(tree)
     # print('missing: ', missings)
-    ast = make_ast(tree, ParseEnv(), 'Test')
+    env = ParseEnv()
+    ast = make_ast(tree, env, 'Test')
+    ast1 = translate_synonyms([ast], env)
+
     print(ast)
+    print(ast1)
 

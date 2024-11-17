@@ -6,6 +6,7 @@ from constraint import get_all_constraints, GlobalState
 from node_depth import gather_label
 from node_graph import gather_node_graph
 from node_table import gather_node_table
+from parser.synonym import replace_synonyms_recursive, translate_synonyms
 from parser.walk import parse_haskell, make_ast
 from rename import rename
 from scope import get_vendors, get_buyers, allocate_buyers
@@ -41,6 +42,7 @@ def parse_modules(files: list[tuple[str, str]]) -> State:
             state.parsing_errors.append(e.loc)
             break
 
+    asts = translate_synonyms(asts, parse_env)
     if state.parsing_errors:
         return state
     vendors = get_vendors(asts, state)

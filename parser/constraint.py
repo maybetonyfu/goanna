@@ -235,13 +235,21 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 state.add_axiom(unify(T, node_var(ty)), head)
                 generate_constraint(ty, head, state)
 
-        case TyVar():
-            state.add_rule(unify(node_var(ast), type_var(cast(TyVar, ast), head.name)), head, ast.id)
+        case TyVar(axiom=axiom):
+            if axiom:
+                state.add_axiom(unify(node_var(ast), type_var(cast(TyVar, ast), head.name)), head, ast.id)
+            else:
+                state.add_rule(unify(node_var(ast), type_var(cast(TyVar, ast), head.name)), head, ast.id)
 
-        case TyCon(canonical_name=canonical_name):
-            state.add_rule(unify(node_var(ast), LAtom(value=canonical_name)), head, ast.id)
 
-        case TyForall(context=context, ty=ty):
+        case TyCon(canonical_name=canonical_name, axiom=axiom):
+            if axiom:
+                state.add_axiom(unify(node_var(ast), LAtom(value=canonical_name)), head)
+            else:
+                state.add_rule(unify(node_var(ast), LAtom(value=canonical_name)), head, ast.id)
+
+
+        case TyForall(context=context, ty=ty, axiom=axiom):
             if context is not None:
                 for tyApp in context.assertions:
                     tyApp: TyApp
@@ -252,25 +260,41 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                                         args=[LStruct(functor='with', args=[LAtom(value=class_name), instance_var]),
                                               LVar(value='Classes')])
                     state.add_rule(once(rule_body), head, tyApp.id)
-            state.add_rule(unify(node_var(ast), node_var(ty)), head, ast.id)
+            if axiom:
+                state.add_axiom(unify(node_var(ast), node_var(ty)), head)
+            else:
+                state.add_rule(unify(node_var(ast), node_var(ty)), head, ast.id)
+
             generate_constraint(ty, head, state)
 
-        case TyApp(ty1=ty1, ty2=ty2):
+        case TyApp(ty1=ty1, ty2=ty2, axiom=axiom):
             generate_constraint(ty1, head, state)
             generate_constraint(ty2, head, state)
-            state.add_rule(unify(node_var(ast), pair(node_var(ty1), node_var(ty2))), head, ast.id)
+            if axiom:
+                state.add_axiom(unify(node_var(ast), pair(node_var(ty1), node_var(ty2))), head)
+            else:
+                state.add_rule(unify(node_var(ast), pair(node_var(ty1), node_var(ty2))), head, ast.id)
 
-        case TyFun(ty1=ty1, ty2=ty2):
+        case TyFun(ty1=ty1, ty2=ty2, axiom=axiom):
             generate_constraint(ty1, head, state)
             generate_constraint(ty2, head, state)
-            state.add_rule(unify(node_var(ast), fun_of(node_var(ty1), node_var(ty2))), head, ast.id)
+            if axiom:
+                state.add_axiom(unify(node_var(ast), fun_of(node_var(ty1), node_var(ty2))), head)
+            else:
+                state.add_rule(unify(node_var(ast), fun_of(node_var(ty1), node_var(ty2))), head, ast.id)
 
-        case TyList(ty=ty):
+        case TyList(ty=ty, axiom=axiom):
             generate_constraint(ty, head, state)
-            state.add_rule(unify(node_var(ast), list_of(node_var(ty))), head, ast.id)
+            if axiom:
+                state.add_axiom(unify(node_var(ast), list_of(node_var(ty))), head)
+            else:
+                state.add_rule(unify(node_var(ast), list_of(node_var(ty))), head, ast.id)
 
-        case TyTuple(tys=tys):
-            state.add_rule(unify(node_var(ast), tuple_of(*[node_var(ty) for ty in tys])), head, ast.id)
+        case TyTuple(tys=tys, axiom=axiom):
+            if axiom:
+                state.add_axiom(unify(node_var(ast), tuple_of(*[node_var(ty) for ty in tys])), head)
+            else:
+                state.add_rule(unify(node_var(ast), tuple_of(*[node_var(ty) for ty in tys])), head, ast.id)
             for ty in tys:
                 generate_constraint(ty, head, state)
 

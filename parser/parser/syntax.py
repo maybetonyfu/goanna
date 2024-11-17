@@ -195,28 +195,33 @@ class TyCon(Pretty):
     name: str
     module: str | None
     canonical_name: str | None
+    axiom: bool
 
 
 @dataclass
 class TyApp(Pretty):
     ty1: Ty
     ty2: Ty
+    axiom: bool
 
 
 @dataclass
 class TyFun(Pretty):
     ty1: Ty
     ty2: Ty
+    axiom: bool
 
 
 @dataclass
 class TyTuple(Pretty):
     tys: list[Ty]
+    axiom: bool
 
 
 @dataclass
 class TyList(Pretty):
     ty: Ty
+    axiom: bool
 
 
 @dataclass
@@ -231,12 +236,14 @@ class TyPrefixTuple(Pretty):
 class TyVar(Pretty):
     name: str
     canonical_name: str | None
+    axiom: bool
 
 
 @dataclass
 class TyForall(Pretty):
     context: Context | None
     ty: Ty
+    axiom: bool
 
 
 # Expressions
