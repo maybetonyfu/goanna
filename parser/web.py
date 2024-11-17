@@ -173,6 +173,7 @@ floor :: Num a => a -> Int
 ceiling :: Num a => a -> Int
 ($) :: (a -> b) -> a -> b
 (.) :: (b -> c) -> (a -> b) -> a -> c
+type String = [Char]
 '''
 
 prelude_monad_minimal = '''
@@ -192,7 +193,7 @@ no_prelude = ''
 
 @app.post("/translate")
 async def translate(body: str = Body()):
-    state = run_modules([('Main', body), ('Prelude',  no_prelude)])
+    state = run_modules([('Main', body), ('Prelude',  prelude)])
     inventory_input = InventoryInput(
         base_modules=["Prelude"],
         declarations=state.declarations,
