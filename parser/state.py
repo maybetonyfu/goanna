@@ -128,6 +128,7 @@ class Identifier(BaseModel): # This is just a simpler vendor, for sending throug
 
 class InventoryInput(BaseModel):
     declarations: list[str]
+    top_levels: list[str]
     base_modules: list[str]
     rules: list[dict] = []
     arguments: Arguments = {}
@@ -149,6 +150,7 @@ class State(BaseModel):
     import_errors: list[Buyer] = []
     module_mapping: dict[str, str] = {}
     declarations: list[str] = []
+    top_levels: list[str] = []
     rules: list[Rule] = []
     arguments: Arguments = {}
 

@@ -63,10 +63,15 @@ def parse_modules(files: list[tuple[str, str]]) -> State:
         return vd.module, node_table[vd.node_id][0][0], node_table[vd.node_id][0][1]
     declaration_vendors = sorted(declaration_vendors, key=vendor_sort)
     declarations = []
+    top_levels = []
     for d in declaration_vendors:
         if d.canonical_name not in declarations:
             declarations.append(d.canonical_name)
+        if d.effective_range.is_global and d.canonical_name not in top_levels:
+            top_levels.append(d.canonical_name)
+
     state.declarations = declarations
+    state.top_levels = top_levels
 
     return state
 

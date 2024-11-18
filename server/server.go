@@ -20,6 +20,7 @@ type Response struct {
 	LoadingErrors []string
 	NodeRange     map[int]inventory.Range
 	InferredTypes map[string]string
+	TopLevels     []string
 	Declarations  []string
 }
 
@@ -39,6 +40,7 @@ func handleParsingError(w http.ResponseWriter, inv *inventory.Inventory) {
 		NodeRange:     inv.NodeRange,
 		InferredTypes: make(map[string]string),
 		Declarations:  inv.Declarations,
+		TopLevels:     inv.TopLevels,
 	}
 	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
@@ -55,6 +57,7 @@ func handleImportError(w http.ResponseWriter, inv *inventory.Inventory) {
 		NodeRange:     inv.NodeRange,
 		InferredTypes: make(map[string]string),
 		Declarations:  inv.Declarations,
+		TopLevels:     inv.TopLevels,
 	}
 	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
@@ -132,6 +135,7 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			NodeRange:     report.NodeRange,
 			InferredTypes: make(map[string]string),
 			Declarations:  inv.Declarations,
+			TopLevels:     inv.TopLevels,
 		}
 		err := json.NewEncoder(w).Encode(response)
 		if err != nil {
@@ -147,6 +151,7 @@ func typeCheck(w http.ResponseWriter, r *http.Request) {
 			NodeRange:     inv.NodeRange,
 			InferredTypes: haskell.InferTypes(*inv),
 			Declarations:  inv.Declarations,
+			TopLevels:     inv.TopLevels,
 		}
 		err := json.NewEncoder(w).Encode(response)
 		if err != nil {

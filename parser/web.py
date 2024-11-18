@@ -197,6 +197,7 @@ async def translate(body: str = Body()):
     inventory_input = InventoryInput(
         base_modules=["Prelude"],
         declarations=state.declarations,
+        top_levels=state.top_levels,
         rules=[{
             'head': r.head.model_dump(),
             'id': r.id,

@@ -61,6 +61,7 @@ type Input struct {
 	NodeTable     []NodePair                     `json:"node_graph"`
 	MaxLevel      int                            `json:"max_depth"`
 	NodeRange     map[int]Range                  `json:"node_range,"`
+	TopLevels     []string                       `json:"top_levels"`
 }
 
 type Inventory struct {
