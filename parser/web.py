@@ -85,7 +85,8 @@ class Functor f
 class Functor f => Applicative f 
 class Applicative m => Monad m 
 
-fmap :: Functor f => (a -> b) -> f a -> f b  
+fmap :: Functor f => (a -> b) -> f a -> f b
+(<$>) :: Functor f => (a -> b) -> f a -> f b
 pure :: Applicative f => a -> f a
 (<*>) :: Applicative f => f (a -> b) -> f a -> f b
 (>>) :: Monad m => m a -> m b -> m b

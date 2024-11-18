@@ -25,6 +25,7 @@ fixities = {
     "&&" : 3,
     "||" : 2,
     "++" : 5,
+    "<$>": 4,
     "<*>" : 4,
     ">>": 1,
     ">>=": 1,
@@ -46,6 +47,7 @@ associativity ={
     "&&": 'r',
     "||": 'r',
     "++": 'r',
+    "<$>": 'l',
     "<*>": 'l',
     ">>": 'l',
     ">>=": 'l',
@@ -357,8 +359,8 @@ def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
     rhs_node = node.child_by_field_name("right_operand")
 
     left_priority = rhs_node.type == "infix" and get_infix_fixity(rhs_node) < get_infix_fixity(node)
-    right_associative = rhs_node.type == "infix"  and get_operator_name(rhs_node) == get_operator_name(node) and associativity.get(get_operator_name(node)) == 'r'
-    if left_priority or right_associative:
+    left_associative = rhs_node.type == "infix"  and get_infix_fixity(rhs_node) == get_infix_fixity(node) and associativity.get(get_operator_name(node)) == 'l'
+    if left_priority or left_associative:
             # 4 * 1 + 1 $ z
             _lhs = ExpInfixApp(
                 loc=(lhs.loc[0], make_loc(rhs_node.child_by_field_name("left_operand"))[1]),
@@ -370,6 +372,7 @@ def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
                 canonical_name=None,
             )
             return match_infix(rhs_node, _lhs, env)
+
     else:
             # a $ 1 + 2
             right_operand = match_exp(node.child_by_field_name("right_operand"), env)
@@ -495,7 +498,6 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
     if node.is_missing:
         raise HaskellParsingError(make_loc(node))
     match node.type:
-
         case "signature":
             names = []
             if name_binds := node.child_by_field_name("names"):
@@ -566,6 +568,7 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
             pat = match_pat(variable_node, env)
             rhs = match_rhs(node, env)
             return PatBind(id=env.new_id(), loc=make_loc(node), pat=pat, rhs=rhs)
+
         case "fixity":
             pass
 
