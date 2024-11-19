@@ -17,6 +17,9 @@ class GlobalState:
     def max_level(self) -> int:
         raise NotImplementedError
 
+    def is_parent_of(self, parent: str, child: str) -> bool:
+        raise NotImplementedError
+
 
 class ConstraintGenState:
     def __init__(self, global_state: GlobalState):
@@ -200,29 +203,22 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             state.add_rule(unify(node_var(ast), list_of(fresh)), head, ast.id)
             state.add_rule(unify_all([node_var(elem) for elem in elems] + [fresh]), head, ast.id)
 
+        case PInfix(pat1=pat1, pat2=pat2, canonical_name=canonical_name):
+            fun_var = state.fresh()
+            fun = fun_of(node_var(pat1), node_var(pat2), node_var(ast))
+            state.add_rule(unify(fun, fun_var), head, ast.id)
+            state.add_rule(type_of(canonical_name, fun_var, wildcard, wildcard), head, ast.id)
+            generate_constraint(pat1, head, state)
+            generate_constraint(pat2, head, state)
+
+
         case PApp(canonical_name=canonical_name, pats=pats):
-            if canonical_name == 'builtin_cons':
-                car = pats[0]
-                cdr = pats[1]
-                v_elem = state.fresh()
-                v_list = state.fresh()
-                v_cons = state.fresh()
-                state.add_axiom(unify(node_var(ast), v_list), head)
-                state.add_rule(unify(node_var(cdr), v_list), head, cdr.id)
-
-                state.add_axiom(unify(v_cons, fun_of(v_elem, v_list, v_list)), head)
-                state.add_rule(type_of(canonical_name, v_cons, wildcard, wildcard), head, ast.id)
-
-                generate_constraint(car, head, state)
-                generate_constraint(cdr, head, state)
-
-            else:
-                fun = fun_of(*[node_var(pat) for pat in pats], node_var(ast))
-                v = state.fresh()
-                state.add_axiom(unify(fun, v), head)
-                for pat in pats:
-                    generate_constraint(pat, head, state)
-                state.add_rule(type_of(canonical_name, v, wildcard, wildcard), head, ast.id)
+            fun = fun_of(*[node_var(pat) for pat in pats], node_var(ast))
+            v = state.fresh()
+            state.add_axiom(unify(fun, v), head)
+            for pat in pats:
+                generate_constraint(pat, head, state)
+            state.add_rule(type_of(canonical_name, v, wildcard, wildcard), head, ast.id)
 
         case PTuple(pats=pats):
             state.add_axiom(unify(node_var(ast), tuple_of(*[node_var(pat) for pat in pats])), head)
@@ -237,7 +233,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
 
         case TyVar(axiom=axiom):
             if axiom:
-                state.add_axiom(unify(node_var(ast), type_var(cast(TyVar, ast), head.name)), head, ast.id)
+                state.add_axiom(unify(node_var(ast), type_var(cast(TyVar, ast), head.name)), head)
             else:
                 state.add_rule(unify(node_var(ast), type_var(cast(TyVar, ast), head.name)), head, ast.id)
 
@@ -396,8 +392,10 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 state.add_rule(unify(node_var(ast), 'T'), head, ast.id)
 
             elif canonical_name in state.declarations:  # Function
-                state.add_rule(type_of(canonical_name, node_var(ast), wildcard, ZetaVar), head, ast.id)
-
+                if state.global_state.is_parent_of(head.name, canonical_name):
+                    state.add_rule(type_of(canonical_name, node_var(ast), wildcard, ZetaVar), head, ast.id)
+                else:
+                    state.add_rule(type_of(canonical_name, node_var(ast), wildcard, wildcard), head, ast.id)
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
 

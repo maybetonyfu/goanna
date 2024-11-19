@@ -153,7 +153,7 @@ class State(BaseModel):
     top_levels: list[str] = []
     rules: list[Rule] = []
     arguments: Arguments = {}
-
+    closures: Closures = {}
     classes: SuperClasses = {}
     type_vars: TypeVars = {}
     node_depth: dict[int, int] = {}
@@ -170,3 +170,8 @@ class State(BaseModel):
 
     def max_level(self) -> int:
         return self.max_depth
+
+    def is_parent_of(self, parent: str, child: str) -> bool:
+        if child not in self.closures:
+            return False
+        return parent in self.closures[child]

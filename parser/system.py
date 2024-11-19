@@ -81,8 +81,9 @@ def static_analysis(state: State) -> State:
     state.node_depth = gather_label(asts)
     state.max_depth = max(state.node_depth.values())
     state.node_graph = gather_node_graph(asts)
-    get_all_constraints(asts, cast(GlobalState, state))
     closures: Closures = gather_closures(asts)
+    state.closures = closures
+    get_all_constraints(asts, cast(GlobalState, state))
     state.arguments = gather_arguments(asts, closures)
     state.classes = gather_classes(asts)
     state.type_vars = gather_type_vars(asts, state.classes)
@@ -98,8 +99,10 @@ def run_modules(files: list[tuple[str, str]]) -> State:
 
 
 if __name__ == '__main__':
-    state = parse_modules([('Main.hs', "x = [y | z <- [1,2,3]]")])
-    print(state.asts[0])
+    state = run_modules([
+        ('Main.hs', "x = 1\ny = x"),
+        ('Prelude.hs', 'map :: (a->b)->[a]->[b]')
+    ])
 
 
 # Module(name='Main.hs', decls=[

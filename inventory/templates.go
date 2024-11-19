@@ -14,7 +14,7 @@ test_class([with(Class, Instance)|XS]) :-
     test_class(XS).
 test_class(_).
 
-cons(T, _, _, _, _, _) :-
+builtin_cons(T, _, _, _, _, _) :-
     T = pair(function(A), B),
     B = pair(function(C), D),
     C = pair(list, A),
