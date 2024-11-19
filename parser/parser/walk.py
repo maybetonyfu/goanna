@@ -358,8 +358,8 @@ def get_operator_module_name(node: Node) -> str | None:
 def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
     rhs_node = node.child_by_field_name("right_operand")
 
-    left_priority = rhs_node.type == "infix" and get_infix_fixity(rhs_node) < get_infix_fixity(node)
-    left_associative = rhs_node.type == "infix"  and get_infix_fixity(rhs_node) == get_infix_fixity(node) and associativity.get(get_operator_name(node)) == 'l'
+    left_priority = rhs_node.type == "infix" and get_infix_fixity(rhs_node) <= get_infix_fixity(node)
+    left_associative = rhs_node.type == "infix"  and get_operator_name(rhs_node) == get_operator_name(node) and associativity.get(get_operator_name(node)) == 'r'
     if left_priority or left_associative:
             # 4 * 1 + 1 $ z
             _lhs = ExpInfixApp(
