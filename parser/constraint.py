@@ -72,7 +72,7 @@ def fun_of(*terms: LTerm) -> LTerm:
         case 1:
             return terms[0]
         case _:
-            return pair(LStruct(functor='function', args=[terms[0]]), fun_of(*terms[1:]))
+            return pair(pair(LAtom(value='function'), terms[0]), fun_of(*terms[1:]))
 
 
 # either a b -> ((either a)  b)
@@ -297,8 +297,11 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
         case TyPrefixList():
             state.add_rule(unify(node_var(ast), LAtom(value='list')), head, ast.id)
 
-        case TyPrefixTuple(arity=arity):
+        case TyPrefixTuple():
             state.add_rule(unify(node_var(ast), LAtom(value='tuple')), head, ast.id)
+
+        case TyPrefixFunction():
+            state.add_rule(unify(node_var(ast), LAtom(value='function')), head, ast.id)
 
         case ExpApp(exp1=exp1, exp2=exp2):
             generate_constraint(exp1, head, state)

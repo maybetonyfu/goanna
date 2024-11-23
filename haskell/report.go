@@ -3,7 +3,7 @@ package haskell
 import (
 	"goanna/inventory"
 	"goanna/marco"
-	prolog_tool "goanna/prolog-tool"
+	prologtool "goanna/prolog-tool"
 	"slices"
 	"strings"
 )
@@ -182,7 +182,7 @@ func InferTypes(inv inventory.Inventory) map[string]string {
 	// Infer global types for a SATISFIABLE set of constraints
 	prologResult := inv.QueryTypes(inv.EffectiveRules, []int{})
 	globals := prologResult["G"]
-	globalTypes, err := prolog_tool.ParseTerm(globals)
+	globalTypes, err := prologtool.ParseTerm(globals)
 	if err != nil {
 		panic("Error in parse types")
 	}
@@ -195,7 +195,7 @@ func InferTypes(inv inventory.Inventory) map[string]string {
 		}
 	}
 
-	for i, v := range globalTypes.(prolog_tool.List).Values {
+	for i, v := range globalTypes.(prologtool.List).Values {
 		printer := NewPrinter(inv.Classes)
 		decl := decls[i]
 		globalTypeMapping[decl] = printer.GetType(v)
@@ -211,8 +211,8 @@ func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string)
 		prologResult := inv.QueryTypes(cause.MSS.ToSlice(), rawError.CriticalNodes)
 		globals := prologResult["G"]
 		locals := prologResult["L"]
-		globalTypes, err := prolog_tool.ParseTerm(globals)
-		localTypes, err := prolog_tool.ParseTerm(locals)
+		globalTypes, err := prologtool.ParseTerm(globals)
+		localTypes, err := prologtool.ParseTerm(locals)
 
 		globalTypeMapping := make(map[string]string)
 		decls := make([]string, 0)
@@ -223,14 +223,14 @@ func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string)
 			}
 		}
 
-		for i, v := range globalTypes.(prolog_tool.List).Values {
+		for i, v := range globalTypes.(prologtool.List).Values {
 			printer := NewPrinter(inv.Classes)
 			decl := decls[i]
 			globalTypeMapping[decl] = printer.GetType(v)
 		}
 
 		localTypeMapping := make(map[int]string)
-		for i, v := range localTypes.(prolog_tool.List).Values {
+		for i, v := range localTypes.(prologtool.List).Values {
 			nodeId := rawError.CriticalNodes[i]
 			localTypeMapping[nodeId] = localPrinter.PrepareType(v, nodeId)
 		}

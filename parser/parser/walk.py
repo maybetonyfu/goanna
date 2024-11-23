@@ -463,6 +463,12 @@ def match_type(node: Node, env: ParseEnv) -> Ty:
             arity = node.text.decode('utf-8').count(',') + 1
             return TyPrefixTuple(id=env.new_id(), loc=make_loc(node), arity=arity)
 
+        case "prefix_id":
+            if node.named_children[0].text.decode('utf-8') == "->":
+                return TyPrefixFunction(id=env.new_id(), loc=make_loc(node))
+
+            raise HaskellParsingError(make_loc(node))
+
         case _:
             raise HaskellParsingError(make_loc(node))
 
@@ -621,8 +627,7 @@ def parse_haskell(code: str) -> Node:
 if __name__ == "__main__":
     tree = parse_haskell("""
 
-type X a b = A a b
-y :: X Int Char
+instance Functor ((->) a)
 """)
     print(tree)
     # query = haskell_language.query('(ERROR) @parsing_error')

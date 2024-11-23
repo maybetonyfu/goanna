@@ -15,10 +15,10 @@ test_class([with(Class, Instance)|XS]) :-
 test_class(_).
 
 builtin_cons(T, _, _, _, _, _) :-
-    T = pair(function(A), B),
-    B = pair(function(C), D),
-    C = pair(list, A),
-    D = pair(list, A).
+    T = pair(pair(function, A), pair(pair(function, AS), BS)),
+    AS = pair(list, A),
+    BS = pair(list, A).
+
 `
 var typeCheckTemplate = NewTemplate("type-check", `
 type_check :-

@@ -43,7 +43,7 @@ Rhs = Union["UnguardedRhs", "GuardedRhs"]
 
 Lit = Union['LitChar', 'LitString', 'LitInt', 'LitFrac']
 
-Ty = Union['TyCon', 'TyApp', 'TyFun', 'TyTuple', 'TyList', 'TyVar', 'TyForall', 'TyPrefixList', 'TyPrefixTuple']
+Ty = Union['TyCon', 'TyApp', 'TyFun', 'TyTuple', 'TyList', 'TyVar', 'TyForall', 'TyPrefixList', 'TyPrefixTuple', "TyPrefixFunction"]
 
 Exp = Union['ExpVar', 'ExpCon', 'Lit',  # 'ExpLit', Use lit to simplify
 'ExpApp', 'ExpInfixApp',  # Added this
@@ -231,6 +231,10 @@ class TyPrefixList(Pretty):
 @dataclass
 class TyPrefixTuple(Pretty):
     arity: int
+
+@dataclass()
+class TyPrefixFunction(Pretty):
+    pass
 
 @dataclass
 class TyVar(Pretty):

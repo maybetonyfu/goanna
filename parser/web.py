@@ -98,18 +98,20 @@ instance Functor IO
 instance Functor []
 instance Functor ((,) a)
 instance Functor ((,,) a b)
-
+instance Functor ((->) r)
 instance Applicative Maybe
 instance Applicative IO
 instance Applicative []
 instance Applicative ((,) a)
 instance Applicative ((,,) a b)
+instance Applicative ((->) r)
 
 instance Monad Maybe
 instance Monad IO
 instance Monad []
 instance Monad ((,) a)
 instance Monad ((,,) a b)
+instance Monad ((->) r)
 
 class Monoid a 
 

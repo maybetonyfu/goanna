@@ -13,8 +13,7 @@ import (
 type constructorType int
 
 const (
-	function constructorType = iota
-	list
+	list = iota
 	adt
 	unknown
 )
@@ -91,14 +90,8 @@ func makePair(term prolog_tool.Term) Pair {
 		secondArg := termC.Args[1]
 		switch firstArg.(type) {
 		case prolog_tool.Compound:
-			firstArgC := firstArg.(prolog_tool.Compound)
-			firstArgCArg := firstArgC.Args[0]
-			switch firstArgC.Value {
-			case "function":
-				return Pair{function, firstArgCArg, secondArg}
-			default:
-				return Pair{adt, firstArg, secondArg}
-			}
+			return Pair{adt, firstArg, secondArg}
+
 		case prolog_tool.Atom:
 			firstArgC := firstArg.(prolog_tool.Atom)
 			if firstArgC.Value == "list" {
@@ -112,19 +105,6 @@ func makePair(term prolog_tool.Term) Pair {
 		}
 	default:
 		return Pair{unknown, nil, nil}
-	}
-}
-
-func unrollFunction(term prolog_tool.Term) []prolog_tool.Term {
-	pair := makePair(term)
-	if pair.conType == function {
-		return slices.Concat([]prolog_tool.Term{
-			pair.first,
-		}, unrollFunction(pair.second))
-	} else {
-		return []prolog_tool.Term{
-			term,
-		}
 	}
 }
 
@@ -158,6 +138,29 @@ func adtIsTuple(term prolog_tool.Term) bool {
 	}
 }
 
+func isFunction(term prolog_tool.Term) bool {
+	if makePair(term).conType == adt {
+		args := unrollADT(term)
+		switch arg0 := args[0].(type) {
+		case prolog_tool.Atom:
+			return arg0.Value == "function"
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+func unrollFunction(term prolog_tool.Term) []prolog_tool.Term {
+	if isFunction(term) {
+		args := unrollADT(term)
+		arg1 := args[1]
+		arg2 := args[2]
+		return slices.Concat([]prolog_tool.Term{arg1}, []prolog_tool.Term{arg2})
+	}
+	return []prolog_tool.Term{term}
+}
+
 func (p *Printer) printCompound(term prolog_tool.Compound) string {
 	//fmt.Printf("Term: %v\n", term)
 	switch {
@@ -184,23 +187,13 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 
 		return typeVar
 
-	case makePair(term).conType == function:
-		args := unrollFunction(term)
-		argsText := make([]string, len(args))
-		for i, arg := range args {
-			if makePair(arg).conType == function && i != len(args)-1 {
-				argsText[i] = "(" + p.PrintTerm(arg) + ")"
-			} else {
-				argsText[i] = p.PrintTerm(arg)
-			}
-		}
-		return strings.Join(argsText, "->")
 	case makePair(term).conType == list:
 		content := makePair(term).first
 		return "[" + p.PrintTerm(content) + "]"
 
 	case makePair(term).conType == adt:
 		args := unrollADT(term)
+
 		if adtIsTuple(args[0]) {
 			tupleElems := args[1:]
 			argsText := make([]string, len(tupleElems))
@@ -209,6 +202,22 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 			}
 			return "(" + strings.Join(argsText, ",") + ")"
 		}
+
+		if isFunction(term) {
+			argStrings := make([]string, len(term.Args))
+			functionArgs := unrollFunction(term)
+			for i, arg := range functionArgs {
+				if isFunction(arg) && i != len(term.Args)-1 {
+					argStrings[i] = "(" + p.PrintTerm(arg) + ")"
+				} else {
+					argStrings[i] = p.PrintTerm(arg)
+				}
+			}
+
+			return strings.Join(argStrings, "->")
+
+		}
+
 		argsText := make([]string, len(args))
 		for i, arg := range args {
 			if makePair(arg).conType == adt {
