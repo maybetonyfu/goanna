@@ -41,7 +41,7 @@ func NewMarco(rules []int, satFunc func([]int) bool) *Marco {
 		MUSs:         []IntSet{},
 		MCSs:         []IntSet{},
 		MSSs:         []IntSet{},
-		MaxLoop:      1000,
+		MaxLoop:      5000,
 		LoopCounter:  0,
 		SatFunc:      satFunc,
 		Solver:       NewMaxsatSolver(NewIntSet(rules...)),

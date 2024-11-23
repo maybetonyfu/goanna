@@ -168,7 +168,7 @@ func getDisplayName(loc inventory.Range, file string) string {
 
 	} else {
 		line := lines[loc.FromLine]
-		if loc.ToCol-loc.FromCol > 8 {
+		if loc.ToCol-loc.FromCol > 11 {
 			start := line[loc.FromCol : loc.FromCol+4]
 			end := line[loc.ToCol-4 : loc.ToCol]
 			return strings.Join([]string{start, end}, "...")
@@ -196,7 +196,7 @@ func InferTypes(inv inventory.Inventory) map[string]string {
 	}
 
 	for i, v := range globalTypes.(prolog_tool.List).Values {
-		printer := NewPrinter()
+		printer := NewPrinter(inv.Classes)
 		decl := decls[i]
 		globalTypeMapping[decl] = printer.GetType(v)
 	}
@@ -207,7 +207,7 @@ func InferTypes(inv inventory.Inventory) map[string]string {
 func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string) TypeError {
 	fixes := make([]Fix, len(rawError.Causes))
 	for i, cause := range rawError.Causes {
-		localPrinter := NewPrinter()
+		localPrinter := NewPrinter(inv.Classes)
 		prologResult := inv.QueryTypes(cause.MSS.ToSlice(), rawError.CriticalNodes)
 		globals := prologResult["G"]
 		locals := prologResult["L"]
@@ -224,7 +224,7 @@ func ReportTypeError(rawError marco.Error, inv inventory.Inventory, file string)
 		}
 
 		for i, v := range globalTypes.(prolog_tool.List).Values {
-			printer := NewPrinter()
+			printer := NewPrinter(inv.Classes)
 			decl := decls[i]
 			globalTypeMapping[decl] = printer.GetType(v)
 		}

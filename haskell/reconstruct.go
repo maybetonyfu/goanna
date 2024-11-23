@@ -36,12 +36,14 @@ type MetaVar struct {
 
 type Printer struct {
 	varMapping map[string]*MetaVar
+	classes    map[string][]string
 	currentJob int
 }
 
-func NewPrinter() *Printer {
+func NewPrinter(classes map[string][]string) *Printer {
 	varmapping := make(map[string]*MetaVar)
 	return &Printer{
+		classes:    classes,
 		varMapping: varmapping,
 		currentJob: 0,
 	}
@@ -163,21 +165,23 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 		typeClasses := term.Args[0].(prolog_tool.List)
 		var typeVar string
 		var lookupString string
-		switch term.Args[1].(type) {
+		switch arg1 := term.Args[1].(type) {
 		case prolog_tool.Atom:
 			// This is skolemized constant, we need to turn it into a type var, preferraby using the same letter
-			typeVar = p.printSkolemVar(term.Args[1].(prolog_tool.Atom))
-			lookupString = term.Args[1].(prolog_tool.Atom).Value
+			typeVar = p.printSkolemVar(arg1)
+			lookupString = arg1.Value
 		case prolog_tool.Var:
-			typeVar = p.printVar(term.Args[1].(prolog_tool.Var))
-			lookupString = term.Args[1].(prolog_tool.Var).Value
+			typeVar = p.printVar(arg1)
+			lookupString = arg1.Value
 		default:
 			panic("has([..], X) where X is neither var or atom")
 		}
+
 		for _, class := range typeClasses.Values {
-			className := p.printAtom(class.(prolog_tool.Atom))
+			className := class.(prolog_tool.Atom).Value
 			p.varMapping[lookupString].typeClasses.Add(className)
 		}
+
 		return typeVar
 
 	case makePair(term).conType == function:
@@ -314,26 +318,59 @@ func (p *Printer) AssignVars() {
 			continue
 		}
 
-		if metaVar.typeClasses.Contains("Monad") {
+		if metaVar.typeClasses.Contains("p_Monad") {
 			p.varMapping[lookupName].friendlyName = findSuitableTypeVarName("m", names)
 			continue
 		}
 
-		if metaVar.typeClasses.Contains("Applicative") ||
-			metaVar.typeClasses.Contains("Alternative") ||
-			metaVar.typeClasses.Contains("Functor") {
+		if metaVar.typeClasses.Contains("p_Applicative") ||
+			metaVar.typeClasses.Contains("p_Alternative") ||
+			metaVar.typeClasses.Contains("p_Functor") {
 			p.varMapping[lookupName].friendlyName = findSuitableTypeVarName("f", names)
 			continue
 		}
 
-		if metaVar.typeClasses.Contains("Foldable") {
+		if metaVar.typeClasses.Contains("p_Foldable") {
 			p.varMapping[lookupName].friendlyName = findSuitableTypeVarName("t", names)
 			continue
 		}
 
 		p.varMapping[lookupName].friendlyName = findAvailableTypeVarName(names)
 	}
+}
 
+func normalizeContext(classes []string, superClassMap map[string][]string) []string {
+	toRemove := make([]string, 0)
+	for i, class := range classes {
+		for j, otherClass := range classes {
+			if j <= i {
+				continue
+			}
+			if slices.Contains(superClassMap[class], otherClass) {
+				toRemove = append(toRemove, otherClass)
+			}
+			if slices.Contains(superClassMap[otherClass], class) {
+				toRemove = append(toRemove, class)
+			}
+		}
+	}
+	toKeep := make([]string, 0)
+	for _, class := range classes {
+		if slices.Contains(toRemove, class) {
+			continue
+		}
+		toKeep = append(toKeep, class)
+	}
+	return toKeep
+}
+
+func removeModulePrefix(class string) string {
+	parts := strings.Split(class, "_")
+	if len(parts) == 1 {
+		return parts[0]
+	} else {
+		return parts[len(parts)-1]
+	}
 }
 
 func (p *Printer) CompileType(templateStr string, jobId int) string {
@@ -346,13 +383,18 @@ func (p *Printer) CompileType(templateStr string, jobId int) string {
 		if classes == nil {
 			continue
 		}
-		for c := range classes.Iter() {
+		reducedClasses := normalizeContext(classes.ToSlice(), p.classes)
+		renamedClasses := make([]string, len(reducedClasses))
+		for i, class := range reducedClasses {
+			renamedClasses[i] = removeModulePrefix(class)
+		}
+
+		for _, c := range renamedClasses {
 			classRequirements = append(classRequirements, c+" "+metaVar.tmpl)
 		}
 	}
 
 	var context string
-
 	if len(classRequirements) == 0 {
 		context = ""
 	} else if len(classRequirements) == 1 {
@@ -389,7 +431,7 @@ func TestReconstruct() {
 	for _, adt := range adts {
 		fmt.Printf("adt: %+v\n", adt)
 	}
-	printer := NewPrinter()
+	printer := NewPrinter(make(map[string][]string))
 	s := printer.GetType(prologTerm)
 	fmt.Println(s)
 
