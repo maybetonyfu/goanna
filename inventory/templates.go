@@ -22,15 +22,12 @@ builtin_cons(T, _, _, _, _, _) :-
 `
 var typeCheckTemplate = NewTemplate("type-check", `
 type_check :-
-    once((
-        {{ range . -}}
-            {{-  .Name  }}(_, [], _, _, [
-                {{- range .VarClasses -}}
-                    has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
-                {{- end -}}], C_{{.Name}}),
-        {{ end -}}
-		true
-    )),
+	{{ range . -}}
+		{{-  .Name  }}(_, [], _, _, [
+			{{- range .VarClasses -}}
+				has([{{ joinStr .Classes "" ", " }}], {{ .VarName }}){{ if not .IsLast }},{{ end }}
+			{{- end -}}], C_{{.Name}}),
+	{{ end -}}
     {{- range . }}
     test_class(C_{{ .Name }}),
     {{- end }}
