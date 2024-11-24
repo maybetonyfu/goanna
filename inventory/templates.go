@@ -15,9 +15,8 @@ test_class([with(Class, Instance)|XS]) :-
 test_class(_).
 
 builtin_cons(T, _, _, _, _, _) :-
-    T = pair(pair(function, A), pair(pair(function, AS), BS)),
-    AS = pair(list, A),
-    BS = pair(list, A).
+    T = pair(pair(function, A), pair(pair(function, AS), AS)),
+    AS = pair(list, A).
 
 `
 var typeCheckTemplate = NewTemplate("type-check", `
@@ -61,7 +60,7 @@ var functionTemplate2 = NewTemplate("fun2", `
     Gamma = [ {{ joinInt .Captures "_" "," }} ],
     {{ end -}}
     {{ if ne (len .Arguments) 0 -}}
-    Zeta = [{{ joinStr .Arguments "_" "," }} | _],
+    Zeta = [{{ joinStr .Arguments "_" "," }} ],
     {{ end -}}
     {{- if ne (len .TypeVars) 0 -}}
 	Theta = [{{ joinStr .TypeVars (printf "_%s_" .Name) "," }}],
