@@ -207,7 +207,7 @@ func getHaskellFile(r *http.Request) (string, error) {
 
 func parseHaskellFile(text string) (inventory.Input, error) {
 	resp, err := http.Post(
-		"http://localhost:8090/translate",
+		"http://fly-local-6pn:8090/translate",
 		"text/plain",
 		strings.NewReader(text))
 	if err != nil {
