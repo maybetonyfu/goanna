@@ -121,6 +121,9 @@ func unrollADT(term prolog_tool.Term) []prolog_tool.Term {
 }
 
 func (p *Printer) printAtom(term prolog_tool.Atom) string {
+	if term.Value == "builtin_Top" {
+		return "()"
+	}
 	parts := strings.Split(term.Value, "_")
 	if len(parts) == 1 {
 		return parts[0]

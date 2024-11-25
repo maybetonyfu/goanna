@@ -177,6 +177,18 @@ ceiling :: Num a => a -> Int
 ($) :: (a -> b) -> a -> b
 (.) :: (b -> c) -> (a -> b) -> a -> c
 type String = [Char]
+
+class Show a
+instance Show Bool
+instance Show Int
+instance Show Char
+instance Show Float
+
+instance (Show a) => Show [a]
+instance (Show a) => Show (Maybe a)
+
+show :: Show a => a -> String
+print :: Show a => a -> IO ()
 '''
 
 prelude_monad_minimal = '''
