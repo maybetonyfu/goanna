@@ -187,7 +187,7 @@ instance Show Float
 instance (Show a) => Show [a]
 instance (Show a) => Show (Maybe a)
 
-show :: Show a => a -> String
+show :: Show a => a -> [Char]
 print :: Show a => a -> IO ()
 '''
 
