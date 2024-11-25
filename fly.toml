@@ -10,7 +10,7 @@ primary_region = 'syd'
 
 [processes]
   goanna = "./goanna"
-  parser = "run web.py --port 8090"
+  parser = "fastapi run web.py --port 8090"
 
 [http_service]
   internal_port = 8080
