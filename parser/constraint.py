@@ -357,11 +357,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 state.add_rule(unify(node_var(ast), 'T'), head, ast.id)
 
             elif canonical_name in state.declarations:  # Function
-                v = state.fresh()
-                state.add_rule(once(LStruct(functor='append', args=[ZetaVar, wildcard, v])), head, ast.id)
-                # state.add_rule(type_of(canonical_name, new_var, wildcard, v), head, ast.id)
                 state.add_rules(state.type_of(canonical_name, new_var, head), head, ast.id)
-
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
 

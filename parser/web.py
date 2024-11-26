@@ -186,9 +186,12 @@ instance Show Float
 
 instance (Show a) => Show [a]
 instance (Show a) => Show (Maybe a)
+instance (Show a, Show b) => Show (a, b)
 
 show :: Show a => a -> [Char]
 print :: Show a => a -> IO ()
+putStr :: [Char] -> IO ()
+putStrLn :: [Char] -> IO ()
 '''
 
 prelude_monad_minimal = '''
