@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Literal, Any
 
 from pydantic import BaseModel
@@ -137,6 +138,7 @@ class InventoryInput(BaseModel):
     node_depth: dict[int, int] = {}
     node_graph: list[dict] = []
     max_depth: int = 0
+    collectors: dict[str, list[str]]
     node_range: dict[int, NodeRange] = {}
     parsing_errors: list[NodeRange]
     import_errors: list[Identifier]
@@ -155,6 +157,7 @@ class State(BaseModel):
     arguments: Arguments = {}
     closures: Closures = {}
     classes: SuperClasses = {}
+    collectors: dict[str, list[str]] = defaultdict(list)
     type_vars: TypeVars = {}
     node_depth: dict[int, int] = {}
     node_graph: list[tuple[int, int]] = []
@@ -175,3 +178,6 @@ class State(BaseModel):
         if child not in self.closures:
             return False
         return parent in self.closures[child]
+
+    def add_class_var(self, head_name: str, class_var:str):
+        self.collectors[head_name].append(class_var)

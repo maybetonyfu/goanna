@@ -5,6 +5,9 @@ eq(X, Y) :- unify_with_occurs_check(X, Y).
 all_equal([_]) :- true.
 all_equal([X, Y|XS]) :- eq(X, Y), all_equal([Y|XS]).
 
+appendAll([], []).
+appendAll([X|Y],Z) :- append(X, U, Z), appendAll(Y, U).
+
 member1(L,[L|_]) :- !.
 member1(L,[_|RS]) :- member1(L,RS).
 
@@ -68,7 +71,7 @@ var functionTemplate2 = NewTemplate("fun2", `
     {{ range .RuleBody   -}}
     {{ . }},                                                                                    
     {{ end -}}
-    true`)
+	once(appendAll([{{ joinStr .CollectorVars "" ","}}], Classes))`)
 
 var mainTemplate = NewTemplate("main", `
 main(G, L) :-

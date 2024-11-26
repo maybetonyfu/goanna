@@ -123,7 +123,7 @@ mempty :: Monoid a =>  a
 
 filter :: (a -> Bool) -> [a] -> [a]
 read :: [Char] -> a
-show :: a -> [Char]
+
 otherwise = True
 map :: (a -> b) -> [a] -> [b]
 foldr :: (a -> b -> b) -> b -> [a] -> b
@@ -230,6 +230,7 @@ async def translate(body: str = Body()):
         node_range={
             node_id: NodeRange.from_range(_range)
          for node_id, _range in state.node_table.items()},
+        collectors=state.collectors,
     )
 
     return inventory_input

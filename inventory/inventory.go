@@ -62,6 +62,7 @@ type Input struct {
 	MaxLevel      int                            `json:"max_depth"`
 	NodeRange     map[int]Range                  `json:"node_range,"`
 	TopLevels     []string                       `json:"top_levels"`
+	Collectors    map[string][]string            `json:"collectors"`
 }
 
 type Inventory struct {
@@ -117,6 +118,9 @@ func NewInventory(input Input) *Inventory {
 			instanceRules[rule.Head.Name][rule.Head.Id] = append(instanceRules[rule.Head.Name][rule.Head.Id], rule.Body)
 		}
 	}
+
+	//qualifiedVars := make(map[string][]string)
+
 	return &Inventory{
 		Input:          input,
 		AxiomaticRules: make([]int, 0),
@@ -273,12 +277,18 @@ func (inv *Inventory) RenderTypingRules(rules, captures []int) []string {
 		result = append(result, TemplateToString(functionTemplate1, name))
 		result = append(result, TemplateToString(functionTemplate2,
 			struct {
-				Name      string
-				Arguments []string
-				Captures  []int
-				RuleBody  []string
-				TypeVars  []string
-			}{name, ownArguments, capturedNodes, ownTypingRuleBody, owenTypeVars}))
+				Name          string
+				Arguments     []string
+				Captures      []int
+				RuleBody      []string
+				TypeVars      []string
+				CollectorVars []string
+			}{name,
+				ownArguments,
+				capturedNodes,
+				ownTypingRuleBody,
+				owenTypeVars,
+				inv.Collectors[name]}))
 	}
 	return result
 }
@@ -302,12 +312,19 @@ func (inv *Inventory) renderChangedTypingRules(names []string, rules []int) []st
 		result = append(result, TemplateToString(functionTemplate1, name))
 		result = append(result, TemplateToString(functionTemplate2,
 			struct {
-				Name      string
-				Arguments []string
-				Captures  []int
-				RuleBody  []string
-				TypeVars  []string
-			}{name, ownArguments, []int{}, ownTypingRuleBody, owenTypeVars}))
+				Name          string
+				Arguments     []string
+				Captures      []int
+				RuleBody      []string
+				TypeVars      []string
+				CollectorVars []string
+			}{name,
+				ownArguments,
+				[]int{},
+				ownTypingRuleBody,
+				owenTypeVars,
+				inv.Collectors[name],
+			}))
 	}
 	return result
 }

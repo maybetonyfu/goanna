@@ -20,6 +20,8 @@ class GlobalState:
     def is_parent_of(self, parent: str, child: str) -> bool:
         raise NotImplementedError
 
+    def add_class_var(self, head_name: str, class_var:str):
+        raise NotImplementedError
 
 class ConstraintGenState:
     def __init__(self, global_state: GlobalState):
@@ -37,6 +39,10 @@ class ConstraintGenState:
     def add_rule(self, rule: LTerm, head: RuleHead, node_id: int):
         self.global_state.add_rule(Rule(head=head, body=rule, axiom=False, node_id=node_id))
 
+    def add_rules(self, rules: list[LTerm], head: RuleHead, node_id: int):
+        for rule in rules:
+            self.add_rule(rule, head, node_id)
+
     def add_axiom(self, rule: LTerm, head: RuleHead):
         self.global_state.add_rule(Rule(head=head, body=rule, axiom=True, node_id=None))
 
@@ -45,11 +51,22 @@ class ConstraintGenState:
         return LVar(value=f'_f{self.fresh_counter}')
 
     def head_of_typing_rule(self, name: str) -> RuleHead:
-        return RuleHead(type='type', name=name, id=0, module=self.module)
+        return RuleHead(type='type', name=name, id=0, module=self.module )
 
     def head_of_instance_rule(self, name: str, instance_id: int) -> RuleHead:
         return RuleHead(type='instance', name=name, id=instance_id, module=self.module)
 
+    def type_of(self, name: str, var: LVar, head: RuleHead) -> list[LStruct]:
+        collector = self.fresh()
+        self.global_state.add_class_var(head.name, collector.value)
+        if self.global_state.is_parent_of(head.name, name):
+            v = self.fresh()
+            rule1 =LStruct(functor=name, args=[var, Call_, wildcard, v, wildcard, collector])
+            rule2 = once(LStruct(functor='append', args=[ZetaVar, wildcard, v]))
+            return [rule1, rule2]
+        else:
+            rule = LStruct(functor=name, args=[var, Call_, wildcard, wildcard, wildcard, collector])
+            return [rule]
 
 def pair(*terms: LTerm) -> LTerm:
     match len(terms):
@@ -94,9 +111,16 @@ def tuple_of(*terms: LTerm) -> LTerm:
             init_items = terms[:-1]
             return pair(tuple_of(*init_items), last_item)
 
+#
+# def type_of(name: str, var: LVar, captures: LVar, arguments: LVar) -> LStruct:
+#     return LStruct(functor=name, args=[var, Call_, captures, arguments, wildcard, Classes])
 
-def type_of(name: str, var: LVar, captures: LVar, arguments: LVar) -> LStruct:
-    return LStruct(functor=name, args=[var, Call_, captures, arguments, wildcard, Classes])
+
+def has_class(v: LVar, class_name: str) -> LTerm:
+    rule_body = LStruct(functor='member',
+                        args=[LStruct(functor='with', args=[LAtom(value=class_name), v]),
+                              LVar(value='_Classes')])
+    return once(rule_body)
 
 
 def node_var(node: Pretty) -> LVar:
@@ -134,10 +158,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                     head = state.head_of_typing_rule(name)
                     class_var = type_var(d_head.ty_vars[0], name)
                     state.add_axiom(unify(T, node_var(ty)), head)
-                    rule_body = LStruct(functor='member',
-                                        args=[LStruct(functor='with', args=[LAtom(value=class_name), class_var]),
-                                              LVar(value='Classes')])
-                    state.add_axiom(once(rule_body), head)
+                    state.add_axiom(has_class(class_var, class_name), head)
                     generate_constraint(ty, head, state)
 
         case InstDecl(context=context, canonical_name=class_name, tys=tys):
@@ -207,7 +228,8 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             fun_var = state.fresh()
             fun = fun_of(node_var(pat1), node_var(pat2), node_var(ast))
             state.add_rule(unify(fun, fun_var), head, ast.id)
-            state.add_rule(type_of(canonical_name, fun_var, wildcard, wildcard), head, ast.id)
+            # state.add_rules(type_of(canonical_name, fun_var, wildcard, wildcard), head, ast.id)
+            state.add_rules(state.type_of(canonical_name, fun_var, head), head, ast.id)
             generate_constraint(pat1, head, state)
             generate_constraint(pat2, head, state)
 
@@ -218,7 +240,8 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             state.add_axiom(unify(fun, v), head)
             for pat in pats:
                 generate_constraint(pat, head, state)
-            state.add_rule(type_of(canonical_name, v, wildcard, wildcard), head, ast.id)
+            # state.add_rule(type_of(canonical_name, v, wildcard, wildcard), head, ast.id)
+            state.add_rules(state.type_of(canonical_name, v, head), head, ast.id)
 
         case PTuple(pats=pats):
             state.add_axiom(unify(node_var(ast), tuple_of(*[node_var(pat) for pat in pats])), head)
@@ -252,10 +275,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                     ty1: TyCon = tyApp.ty1
                     class_name = ty1.canonical_name
                     instance_var = type_var(tyApp.ty2, head.name)
-                    rule_body = LStruct(functor='member',
-                                        args=[LStruct(functor='with', args=[LAtom(value=class_name), instance_var]),
-                                              LVar(value='Classes')])
-                    state.add_rule(once(rule_body), head, tyApp.id)
+                    state.add_rule(has_class(instance_var, class_name), head, tyApp.id)
             if axiom:
                 state.add_axiom(unify(node_var(ast), node_var(ty)), head)
             else:
@@ -339,7 +359,8 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             elif canonical_name in state.declarations:  # Function
                 v = state.fresh()
                 state.add_rule(once(LStruct(functor='append', args=[ZetaVar, wildcard, v])), head, ast.id)
-                state.add_rule(type_of(canonical_name, new_var, wildcard, v), head, ast.id)
+                # state.add_rule(type_of(canonical_name, new_var, wildcard, v), head, ast.id)
+                state.add_rules(state.type_of(canonical_name, new_var, head), head, ast.id)
 
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
@@ -397,33 +418,26 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 state.add_rule(unify(node_var(ast), 'T'), head, ast.id)
 
             elif canonical_name in state.declarations:  # Function
-                if state.global_state.is_parent_of(head.name, canonical_name):
-                    v = state.fresh()
-                    state.add_rule(once(LStruct(functor='append', args=[ZetaVar, wildcard, v])), head, ast.id)
-                    state.add_rule(type_of(canonical_name, node_var(ast), wildcard, v), head, ast.id)
-                else:
-                    state.add_rule(type_of(canonical_name, node_var(ast), wildcard, wildcard), head, ast.id)
+                state.add_rules(state.type_of(canonical_name, node_var(ast), head), head, ast.id)
+                # if state.global_state.is_parent_of(head.name, canonical_name):
+                #     v = state.fresh()
+                #     state.add_rule(once(LStruct(functor='append', args=[ZetaVar, wildcard, v])), head, ast.id)
+                #     state.add_rule(type_of(canonical_name, node_var(ast), wildcard, v), head, ast.id)
+                # else:
+                #     state.add_rule(type_of(canonical_name, node_var(ast), wildcard, wildcard), head, ast.id)
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
 
         case ExpEnumTo(exp=exp) | ExpEnumFrom(exp=exp):
             state.add_rule(unify(node_var(ast), list_of(node_var(exp))), head, ast.id)
-            rule_body = LStruct(functor='member',
-                                args=[LStruct(functor='with', args=[LAtom(value='p_Enum'), node_var(exp)]),
-                                      LVar(value='Classes')])
-            state.add_rule(once(rule_body), head, ast.id)
+            state.add_rule(has_class(node_var(exp), 'p_Enum'), head, ast.id)
             generate_constraint(exp, head, state)
 
         case ExpEnumFromTo(exp1=exp1, exp2=exp2):
             state.add_rule(unify_all([node_var(ast), list_of(node_var(exp1)), list_of(node_var(exp2))]), head, ast.id)
-            rule_body1 = LStruct(functor='member',
-                                args=[LStruct(functor='with', args=[LAtom(value='p_Enum'), node_var(exp1)]),
-                                      LVar(value='Classes')])
-            rule_body2 = LStruct(functor='member',
-                                 args=[LStruct(functor='with', args=[LAtom(value='p_Enum'), node_var(exp2)]),
-                                       LVar(value='Classes')])
-            state.add_rule(once(rule_body1), head, ast.id)
-            state.add_rule(once(rule_body2), head, ast.id)
+            state.add_rule(has_class(node_var(exp1), 'p_Enum'), head, ast.id)
+            state.add_rule(has_class(node_var(exp2), 'p_Enum'), head, ast.id)
+
             generate_constraint(exp1, head, state)
             generate_constraint(exp2, head, state)
 
@@ -445,10 +459,8 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
         case ExpDo(stmts=stmts):
             m = state.fresh()
             a = state.fresh()
-            rule_body = LStruct(functor='member',
-                                args=[LStruct(functor='with', args=[LAtom(value='p_Monad'), m]),
-                                      LVar(value='Classes')])
-            state.add_rule(once(rule_body), head, ast.id)
+
+            state.add_rule(has_class(m, 'p_Monad'), head, ast.id)
             state.add_rule(unify(node_var(ast), pair(m, a)), head, ast.id)
 
             for stmt in stmts[0:-1]:

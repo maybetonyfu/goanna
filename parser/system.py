@@ -72,7 +72,7 @@ def parse_modules(files: list[tuple[str, str]]) -> State:
 
     state.declarations = declarations
     state.top_levels = top_levels
-
+    state.collectors = {v:['_Classes'] for v in declarations}
     return state
 
 
