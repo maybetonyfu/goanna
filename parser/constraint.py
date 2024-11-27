@@ -174,7 +174,7 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                     instance_var = type_var(tyApp.ty2, head.name)
                     state.add_axiom(LStruct(functor=class_name, args=[instance_var]), head)
 
-        case DataDecl(d_head=d_head, constructors=constructors, deriving=_):
+        case DataDecl(d_head=d_head, constructors=constructors, deriving=deriving):
             type_name = d_head.canonical_name
             type_vars: list[TyVar] = d_head.ty_vars
             for constructor in constructors:
@@ -184,6 +184,14 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 state.add_axiom(unify(T, fun_of(*[node_var(ty) for ty in constructor.tys], data_type)), head)
                 for ty in constructor.tys:
                     generate_constraint(ty, head, state)
+
+            for d in deriving:
+                d = cast(TyCon, d)
+                class_name = d.canonical_name
+                ihead = state.head_of_instance_rule(class_name, d.id)
+                print(ihead)
+                data_type = pair(LAtom(value=type_name), *[LVar(value=f'_{v.name}') for v in type_vars])
+                state.add_axiom(unify('T', data_type), ihead)
 
         case PatBind(pat=PVar(canonical_name=canonical_name), rhs=rhs):
             head = state.head_of_typing_rule(canonical_name)

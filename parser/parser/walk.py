@@ -529,6 +529,7 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
             data_head = match_decl_head(node, env)
             constructor_node = node.child_by_field_name("constructors")
             constructors = []
+            deriving = []
             if constructor_node:
                 constructors = constructor_node.children_by_field_name("constructor")
             data_cons = []
@@ -539,7 +540,12 @@ def match_decl(node: Node, env: ParseEnv) -> Decl:
                 field_nodes = [match_type(fn, env) for fn in data_con_node.children_by_field_name('field')]
                 data_cons.append(
                     DataCon(id=env.new_id(), loc=make_loc(c), name=name, tys=field_nodes, canonical_name=None))
-            return DataDecl(id=env.new_id(), loc=make_loc(node), d_head=data_head, constructors=data_cons, deriving=[])
+            deriving_node = node.child_by_field_name('deriving')
+            if deriving_node is not None:
+                for derive in deriving_node.named_children:
+                    name = get_text(derive)
+                    deriving.append(TyCon(id=env.new_id(), loc=make_loc(derive), name=name, canonical_name=None, module=None, axiom=False))
+            return DataDecl(id=env.new_id(), loc=make_loc(node), d_head=data_head, constructors=data_cons, deriving=deriving)
 
         case "class":
             context_node = node.child_by_field_name("context")
@@ -633,7 +639,7 @@ def parse_haskell(code: str) -> Node:
 if __name__ == "__main__":
     tree = parse_haskell("""
 
-instance Functor ((->) a)
+data X = Y deriving B
 """)
     print(tree)
     # query = haskell_language.query('(ERROR) @parsing_error')
