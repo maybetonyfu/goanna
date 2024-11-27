@@ -266,8 +266,7 @@ def get_vendors(asts: list[Pretty], state: State) -> list[Vendor]:
 def update_buyers(module_name: str, data: list[Buyer], ast: Pretty, *_) -> list[Buyer]:
     match ast:
         case ExpVar(name=name, module=module) | ExpCon(name=name, module=module) | \
-             PApp(name=name, module=module) | PInfix(name=name, module=module) | \
-             ExpInfixApp(name=name, module=module):
+             PApp(name=name, module=module) | PInfix(name=name, module=module):
             data.append(Buyer(
                 node_id=ast.id,
                 name=name,
@@ -348,7 +347,6 @@ def allocate_buyers(vendors: list[Vendor], buyers: list[Buyer], import_map: dict
                     buyer.canonical_name = 'builtin_unit'
                     buyer.module = 'builtin'
                     new_buyers.append(buyer)
-
                 case 'Top':
                     buyer.canonical_name = 'builtin_Top'
                     buyer.module = 'builtin'
@@ -370,14 +368,6 @@ def allocate_buyers(vendors: list[Vendor], buyers: list[Buyer], import_map: dict
                     buyer.canonical_name = 'builtin_Float'
                     buyer.module = 'builtin'
                     new_buyers.append(buyer)
-                # case 'list': # List Type Constructor []
-                #     buyer.canonical_name = 'list'
-                #     buyer.module = 'builtin'
-                #     new_buyers.append(buyer)
-                # case 'tuple': # Tuple Type Constructor (,)
-                #     buyer.canonical_name = 'tuple'
-                #     buyer.module = 'builtin'
-                #     new_buyers.append(buyer)
                 case _:
                     import_errors.append(buyer)
             continue

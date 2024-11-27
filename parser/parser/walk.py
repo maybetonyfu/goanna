@@ -367,9 +367,12 @@ def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
                 id=env.new_id(),
                 exp1=lhs,
                 exp2=match_exp(rhs_node.child_by_field_name("left_operand"), env),
-                name=get_operator_name(node),
-                module=get_operator_module_name(node),
-                canonical_name=None,
+                op=ExpVar(
+                    id=env.new_id(),
+                    loc=make_loc(node.child_by_field_name("operator")),
+                    name=get_operator_name(node),
+                    module=get_operator_module_name(node),
+                    canonical_name=None)
             )
             return match_infix(rhs_node, _lhs, env)
 
@@ -379,9 +382,12 @@ def match_infix(node: Node, lhs: Exp, env: ParseEnv) -> Exp: # a . b $ c $ 1 + 2
             return ExpInfixApp(id=env.new_id(),
                                loc=make_loc(node),
                                exp1=lhs,
-                               name=get_operator_name(node),
-                               module=get_operator_module_name(node),
-                               canonical_name=None,
+                               op=ExpVar(
+                                   id=env.new_id(),
+                                   loc=make_loc(node.child_by_field_name("operator")),
+                                   name=get_operator_name(node),
+                                   module=get_operator_module_name(node),
+                                   canonical_name=None),
                                exp2=right_operand)
 
 

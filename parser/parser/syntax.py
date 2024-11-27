@@ -274,11 +274,8 @@ class ExpApp(Pretty):
 @dataclass
 class ExpInfixApp(Pretty):
     exp1: Exp
-    name: str
-    module: str | None
-    canonical_name: str | None
+    op: ExpVar
     exp2: Exp
-
 
 @dataclass
 class ExpLambda(Pretty):

@@ -19,7 +19,7 @@ def update_rename(vendors: list[Vendor], buyers: list[Buyer], _unused, ast: Pret
             ast.canonical_names = _names
 
         # Buyers
-        case ExpVar() | ExpCon() | PApp() | TyCon() | InstDecl() | PInfix() | ExpInfixApp():
+        case ExpVar() | ExpCon() | PApp() | TyCon() | InstDecl() | PInfix():
             for buyer in buyers:
                 if buyer.node_id == ast.id:
                     ast.canonical_name = buyer.canonical_name

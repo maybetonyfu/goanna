@@ -81,9 +81,10 @@ class Traverse:
                 ast.exp1 = self.traverse(exp1, ast)
                 ast.exp2 = self.traverse(exp2, ast)
 
-            case ExpInfixApp(exp1=exp1, exp2=exp2):
+            case ExpInfixApp(exp1=exp1, exp2=exp2, op=op):
                 ast.exp1 = self.traverse(exp1, ast)
                 ast.exp2 = self.traverse(exp2, ast)
+                ast.op = self.traverse(op, ast)
 
             case ExpLambda(exp=exp, pats=pats):
                 ast.exp = self.traverse(exp, ast)

@@ -348,19 +348,10 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             generate_constraint(right, head, state)
             generate_constraint(op, head, state)
 
-        case ExpInfixApp(exp1=exp1, exp2=exp2, canonical_name=canonical_name):
+        case ExpInfixApp(exp1=exp1, exp2=exp2, op=op):
             fun = fun_of(node_var(exp1), node_var(exp2), node_var(ast))
-            new_var = state.fresh()
-            state.add_rule(unify(new_var, fun), head, ast.id)
-
-            if canonical_name == head.name:  # Recursive call
-                state.add_rule(unify(node_var(ast), 'T'), head, ast.id)
-
-            elif canonical_name in state.declarations:  # Function
-                state.add_rules(state.type_of(canonical_name, new_var, head), head, ast.id)
-            else:
-                state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
-
+            state.add_rule(unify(node_var(op), fun), head, ast.id)
+            generate_constraint(op, head, state)
             generate_constraint(exp1, head, state)
             generate_constraint(exp2, head, state)
 
