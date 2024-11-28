@@ -209,6 +209,10 @@ instance Monad Maybe
 '''
 no_prelude = ''
 
+@app.get("/ping")
+async def pint():
+    return "pong"
+
 @app.post("/translate")
 async def translate(body: str = Body()):
     state = run_modules([('Main', body), ('Prelude', prelude)])

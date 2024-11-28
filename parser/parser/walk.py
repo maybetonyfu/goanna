@@ -294,7 +294,6 @@ def match_exp(node: Node, env: ParseEnv) -> Exp:
 
         case "list_comprehension":
             exp_node = node.child_by_field_name('expression')
-            print(exp_node)
             exp = match_exp(exp_node, env)
             body = node.child_by_field_name('qualifiers').children_by_field_name('qualifier')
             qualifier_nodes = [q for q in body if q.type == 'generator']

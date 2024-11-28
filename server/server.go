@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Response struct {
@@ -235,7 +236,15 @@ func parseHaskellFile(text string) (inventory.Input, error) {
 	return input, nil
 }
 
+func isServerReady() bool {
+	resp, err := http.Get("http://localhost:8090/ping")
+	return err == nil && resp.StatusCode == 200
+}
+
 func main() {
+	for !isServerReady() {
+		time.Sleep(100 * time.Millisecond)
+	}
 	http.HandleFunc("/prolog", renderProlog)
 	http.HandleFunc("/typecheck", typeCheck)
 	_ = http.ListenAndServe(":8080", nil)

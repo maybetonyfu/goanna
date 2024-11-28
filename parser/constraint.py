@@ -189,7 +189,6 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
                 d = cast(TyCon, d)
                 class_name = d.canonical_name
                 ihead = state.head_of_instance_rule(class_name, d.id)
-                print(ihead)
                 data_type = pair(LAtom(value=type_name), *[LVar(value=f'_{v.name}') for v in type_vars])
                 state.add_axiom(unify('T', data_type), ihead)
 
