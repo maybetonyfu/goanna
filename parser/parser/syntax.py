@@ -190,6 +190,10 @@ class LitFrac(Pretty):
 
 
 # Types
+# Note: Axiom is a bad workaround to prevent expanded type synonym being used in constraint deduction
+# For example, with 1) type Point = (Int, Int) and 2) x :: Point, the Point in 2) should not be further
+# reduced into its sub nodes. Because there is no way to display more granular inconsistency on screen
+# other than pointing out Point is the wrong type to use.
 @dataclass
 class TyCon(Pretty):
     name: str

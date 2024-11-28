@@ -242,8 +242,13 @@ func isServerReady() bool {
 }
 
 func main() {
+	counter := 0
 	for !isServerReady() {
+		if counter > 100 {
+			panic("failed to detect parsing server")
+		}
 		time.Sleep(100 * time.Millisecond)
+		counter = counter + 1
 	}
 	http.HandleFunc("/prolog", renderProlog)
 	http.HandleFunc("/typecheck", typeCheck)

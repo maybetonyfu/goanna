@@ -6,7 +6,7 @@ def enter_node(data: list[tuple[int, int]], ast: Pretty, parent: Pretty) -> list
 
     if parent is None:
         return data
-    if hasattr(ast, 'axiom') and ast.axiom == True:
+    if hasattr(ast, 'axiom') and ast.axiom:
         return data
     data.append((parent.id, ast.id))
 
