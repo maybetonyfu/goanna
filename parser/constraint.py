@@ -411,14 +411,9 @@ def generate_constraint(ast: Pretty, head: RuleHead | None, state: ConstraintGen
             elif canonical_name == head.name:  # Recursive call
                 state.add_rule(unify(node_var(ast), 'T'), head, ast.id)
 
-            elif canonical_name in state.declarations:  # Function
+            elif canonical_name == 'builtin_cons' or canonical_name in state.declarations:  # Function
                 state.add_rules(state.type_of(canonical_name, node_var(ast), head), head, ast.id)
-                # if state.global_state.is_parent_of(head.name, canonical_name):
-                #     v = state.fresh()
-                #     state.add_rule(once(LStruct(functor='append', args=[ZetaVar, wildcard, v])), head, ast.id)
-                #     state.add_rule(type_of(canonical_name, node_var(ast), wildcard, v), head, ast.id)
-                # else:
-                #     state.add_rule(type_of(canonical_name, node_var(ast), wildcard, wildcard), head, ast.id)
+
             else:
                 state.add_rule(unify(node_var(ast), LVar(value=f'_{canonical_name}')), head, ast.id)
 
