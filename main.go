@@ -1,9 +1,9 @@
 package main
 
 import (
-	prologtool "goanna/prolog-tool"
+	"goanna/haskell/parser"
 )
 
 func main() {
-	prologtool.TestProlog()
+	parser.Main()
 }

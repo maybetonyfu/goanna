@@ -80,14 +80,13 @@ func (p *Printer) printSkolemVar(term prolog_tool.Atom) string {
 }
 
 func makePair(term prolog_tool.Term) Pair {
-	switch term.(type) {
+	switch typedTerm := term.(type) {
 	case prolog_tool.Compound:
-		termC := term.(prolog_tool.Compound)
-		if termC.Value != "pair" {
+		if typedTerm.Value != "pair" {
 			return Pair{unknown, nil, nil}
 		}
-		firstArg := termC.Args[0]
-		secondArg := termC.Args[1]
+		firstArg := typedTerm.Args[0]
+		secondArg := typedTerm.Args[1]
 		switch firstArg.(type) {
 		case prolog_tool.Compound:
 			return Pair{adt, firstArg, secondArg}
