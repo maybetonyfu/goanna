@@ -68,7 +68,6 @@ func (t Traverser[T]) visit(ast AST, parentId int) {
 
 	// Exp
 	case *ExpVar:
-	case *ExpCon:
 	case *ExpApp:
 		t.visit(node.exp1, node.id)
 		t.visit(node.exp2, node.id)
