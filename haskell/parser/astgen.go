@@ -5,6 +5,14 @@ import (
 	"slices"
 )
 
+func (pe parseEnv) parseDecls(nodes []treesitter.Node) []Decl {
+	decls := make([]Alt, len(nodes))
+	for i, node := range nodes {
+		decls[i] = pe.parseDecl(&node)
+	}
+	return decls
+}
+
 func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 	if node.IsMissing() {
 		panic("Missing declaration")
@@ -46,6 +54,14 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		panic("Unknown declaration type: " + node.Kind())
 	}
 	return nil
+}
+
+func (pe parseEnv) parsePats(nodes []treesitter.Node) []Pat {
+	pats := make([]Pat, len(nodes))
+	for i, node := range nodes {
+		pats[i] = pe.parsePat(&node)
+	}
+	return pats
 }
 
 func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
@@ -94,21 +110,13 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 			Node: pe.node(node),
 		})
 	case "tuple":
-		elems := pe.children(node, "element")
-		pats := make([]Pat, len(elems))
-		for i, elem := range elems {
-			pats[i] = pe.parsePat(&elem)
-		}
+		pats := pe.parsePats(pe.children(node, "element"))
 		return Pat(&PTuple{
 			pats: pats,
 			Node: pe.node(node),
 		})
 	case "list":
-		elems := pe.children(node, "element")
-		pats := make([]Pat, len(elems))
-		for i, elem := range elems {
-			pats[i] = pe.parsePat(&elem)
-		}
+		pats := pe.parsePats(pe.children(node, "element"))
 		return Pat(&PList{
 			pats: pats,
 			Node: pe.node(node),
@@ -151,13 +159,7 @@ func (pe parseEnv) parseLit(node *treesitter.Node) *Lit {
 
 func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 	rhsNodes := pe.children(node, "match")
-	whereNodes := pe.children(node, "binds:decl")
-	wheres := make([]Decl, len(whereNodes))
-
-	for i, where := range whereNodes {
-		wheres[i] = pe.parseDecl(&where)
-	}
-
+	wheres := parseDecls(pe.children(node, "binds:decl"))
 	isPatBinding := node.ChildByFieldName("patterns") == nil
 	isUnguarded := rhsNodes[0].ChildByFieldName("guards") == nil
 	branches := make([]GuardBranch, 0)
@@ -177,12 +179,8 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 				Node:   pe.node(rhs),
 			})
 		} else {
-			guardNodes := pe.children(rhs, "guards:guard")
-			guards := make([]Exp, len(guardNodes))
-			for i, guardNode := range guardNodes {
-				guards[i] = pe.parseExp(&guardNode)
-			}
-			branches = append(branches, GuardBranch{
+			guards := pe.parseExps(pe.children(rhs, "guards:guard"))
+	  	branches = append(branches, GuardBranch{
 				exp:    rhsExp,
 				guards: guards,
 				Node:   pe.node(rhs),
@@ -194,6 +192,150 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 		branches: branches,
 		Node:     pe.node(node),
 	})
+}
+
+func (pe parseEnv) parseAssertions(node *treesitter.Node) []Type {
+	switch node.Kind() {
+	case "parens":
+		return []Type{
+			pe.parseType(node.Child(1)),
+		}
+	case "tuple":
+		typeNodes := pe.children(node, "*")
+		tys := make([]Type, len(typeNodes))
+		for i, typeNode := range typeNodes {
+			tys[i] = pe.parseType(&typeNode)
+		}
+		return tys
+	case "apply":
+		return []Type{
+			pe.parseType(node),
+		}
+	}
+}
+func (pe parseEnv) parseType(nodes []treesitter.Node) []Type {
+	types := make([]Type, len(nodes))
+	for i, node := range nodes {
+		types[i] = pe.parseType(&node)
+	}
+	return types
+}
+func (pe parseEnv) parseType(node *treesitter.Node) Type {
+	switch node.Kind() {
+	case "qualified":
+		module := pe.text(pe.child(node, "module"))
+		name := pe.text(pe.child(node, "id"))
+		return Type(&TyCon{
+			name:      name,
+			canonical: "top",
+			module:    module,
+			Node:      pe.node(node),
+		})
+
+	case "context":
+		assertions := pe.parseAssertions(pe.child(node, "context"))
+		ty := pe.parseType(pe.child(node, "type"))
+		return Type(&TyForall{
+			assertions: assertions,
+			ty:         ty,
+			Node:       pe.node(node),
+		})
+
+	case "unit":
+		return Type(&TyCon{
+			name:      "top",
+			canonical: "top",
+			module:    "",
+			Node:      pe.node(node),
+		})
+	case "name":
+		return Type(&TyCon{
+			name:      pe.text(node),
+			canonical: "",
+			module:    "",
+			Node:      pe.node(node),
+		})
+
+	case "variable":
+		return Type(&TyVar{
+			name:      pe.text(node),
+			canonical: "",
+			module:    "",
+			Node:      pe.node(node),
+		})
+	case "apply":
+		ty1 := pe.parseType(pe.child("constructor"))
+		ty2 := pe.parseType(pe.child("argument"))
+		return Type(&TyApp{
+			ty1:  ty1,
+			ty2:  ty2,
+			Node: pe.node(node),
+		})
+	case "parens":
+		return pe.parseType(pe.child(node, "type"))
+	case "function":
+		ty1 := pe.parseType(pe.child("parameter"))
+		ty2 := pe.parseType(pe.child("result"))
+		return Type(&TyFun{
+			ty1:  ty1,
+			ty2:  ty2,
+			Node: pe.node(node),
+		})
+	case "tuple":
+		typeNodes := pe.children(node, "element")
+		types := make([]Type, len(typeNodes))
+		for i, typeNode := range typeNodes {
+			types[i] = pe.parseType(&typeNode)
+		}
+		return Type(&TyTuple{
+			tys:  tyoes,
+			Node: pe.node(node),
+		})
+	case "list":
+		ty := pe.parseType(pe.child(node, "element"))
+		return Type(&TyList{
+			ty:   ty,
+			Node: pe.node(node),
+		})
+	case "prefix_list":
+		return Type(&TyCon{
+			name:      "list",
+			canonical: "list",
+			module:    "",
+			Node:      pe.node(node),
+		})
+
+	case "prefix_tuple":
+		return Type(&TyCon{
+			name:      "tuple",
+			canonical: " tuple",
+			module:    "",
+			Node:      pe.node(node),
+		})
+
+	case "prefix_id":
+		opName := pe.text(pe.children(node, "*")[0])
+		if opName == "->" {
+			return Type(&TyCon{
+				name:      "function",
+				canonical: "function",
+				module:    "",
+				Node:      pe.node(node),
+			})
+		} else {
+			panic("Unknonw op name: " + opName)
+		}
+	case _:
+		panic("Unknown type node: " + node.Kind())
+	}
+}
+
+func (pe parseEnv) parseExps(nodes []treesitter.Node) []Exp {
+	exps := make([]Exp, len(nodes))
+	for i, node := range nodes {
+		exps[i] = pe.parseExp(node)
+	}
+	return exps
 }
 
 func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
@@ -325,14 +467,15 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			exps: exps,
 			Node: pe.node(node),
 		})
-  case "arithmetic_sequence":
+
+	case "arithmetic_sequence":
 		start := pe.child(node, "from")
 		end := pe.child(node, "to")
 		if end == nil {
 			exp := pe.parseExp(&start)
 			return Exp(&ExpEnumFrom{
-				exp: exp,
-				Node: pe.node(node)
+				exp:  exp,
+				Node: pe.node(node),
 			})
 		} else {
 			exp1 := pe.parseExp(&start)
@@ -340,9 +483,66 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			return Exp(&ExpEnumFromTo{
 				exp1: exp1,
 				exp2: exp2,
-				Node: pe.node(node)
+				Node: pe.node(node),
 			})
 		}
+	case "do":
+		statementNodes := pe.children(node, "statement")
+		stmts := make([]Statement, len(statementNodes))
+		for i, statementNode := range statementNodes {
+			switch statementNode.Kind() {
+			case "exp":
+				stmts[i] = Statement(&Qualifier{
+					exp:  pe.parseExp(statementNode.NamedChild(0)),
+					Node: pe.node(statementNode),
+				})
+			case "bind":
+				pat := pe.parsePat(pe.child(statementNode, "pattern"))
+				exp := pe.parseExp(pe.child(statementNode, "expression"))
+				stmts[i] = Statement(&Generator{
+					pat:  pat,
+					exp:  exp,
+					Node: pe.node(statementNode),
+				})
+			case "let":
+				declNodes := pe.children(statementNode, "binds:decl")
+				binds := make([]Decl, len(declNodes))
+				for i, declNode := range declNodes {
+					binds[i] = parseDecl(&declNode)
+				}
+				stmts[i] = Statement(&LetStmt{
+					binds: binds,
+					Node:  pe.node(statementNode),
+				})
+			}
+		}
+		return Exp(&ExpDo{
+			stmts: stmts,
+			Node:  pe.node(node),
+		})
+	case "list_comprehension":
+		exp := pe.parseExp(pe.child(node, "expression"))
+		generators := make([]Generator, 0)
+		guards := make([]Exp, 0)
+		for _, qualiferNode := range pe.children(node, "qualifiers:qualifier") {
+			switch qualifierNode.Kind() {
+			case "generator":
+				pat := pe.parsePat(pe.child(qualifierNode, "pattern"))
+				exp := pe.parseExp(pe.child(qualifierNode, "expression"))
+				generators = append(generators, Generator{
+					pat:  pat,
+					exp:  exp,
+					Node: pe.node(qualifierNode),
+				})
+			case "boolean":
+				guards = append(guards, pe.parseExp(qualifier.Child(0)))
+			}
+		}
+		return Exp(&ExpComprehension{
+			exp:        exp,
+			generators: generators,
+			Node:       pe.node(node),
+		})
 
 	case "infix":
 		exps, ops := pe.flattenInfix(node)
@@ -413,6 +613,14 @@ func (pe parseEnv) buildInfix(exps []Exp, ops []ExpVar) ([]Exp, []ExpVar) {
 	ops = slices.Concat(ops[:highestIndex], ops[highestIndex+1:])
 	exps = slices.Concat(exps[:highestIndex], []Exp{exp}, exps[highestIndex+2:])
 	return pe.buildInfix(exps, ops)
+}
+
+func (pe parseEnv) parseAlts(nodes []treesitter.Node) []Alt {
+	alts := make([]Alt, len(nodes))
+	for i, node := range nodes {
+		alts[i] = pe.parseAlt(&node)
+	}
+	return alts
 }
 
 func (pe parseEnv) parseAlt(node *treesitter.Node) Alt {

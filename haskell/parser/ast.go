@@ -127,35 +127,6 @@ func (*TyList) isType()        {}
 func (*TyList) pretty() string { return "" }
 func (n *TyList) loc() Loc {return n.Node.loc}
 
-//  TyPrefixList
-type TyPrefixList struct {
-	axiom bool
-	Node
-}
-
-func (*TyPrefixList) isType()        {}
-func (*TyPrefixList) pretty() string { return "" }
-func (n *TyPrefixList) loc() Loc {return n.Node.loc}
-
-//  TyPrefixTuple
-type TyPrefixTuple struct {
-	axiom bool
-	Node
-}
-
-func (*TyPrefixTuple) isType()        {}
-func (*TyPrefixTuple) pretty() string { return "" }
-func (n *TyPrefixTuple) loc() Loc {return n.Node.loc}
-
-//  TyPrefixFunction
-type TyPrefixFunction struct {
-	axiom bool
-	Node
-}
-
-func (*TyPrefixFunction) isType()        {}
-func (*TyPrefixFunction) pretty() string { return "" }
-func (n *TyPrefixFunction) loc() Loc {return n.Node.loc}
 
 //  TyVar
 type TyVar struct {
@@ -443,7 +414,7 @@ func (n *ExpEnumFrom) loc() Loc {return n.Node.loc}
 //  ExpComprehension
 type ExpComprehension struct {
 	exp         Exp
-	quantifiers []Generator
+	generators  []Generator
 	guards      []Exp
 	Node
 }

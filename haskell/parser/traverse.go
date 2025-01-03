@@ -119,8 +119,8 @@ func (t Traverser[T]) visit(ast AST, parentId int) {
 		t.visit(node.exp2, node.id)
 	case *ExpComprehension:
 		t.visit(node.exp, node.id)
-		for _, quantifier := range node.quantifiers {
-			t.visit(&quantifier, node.id)
+		for _, gen := range node.generators {
+			t.visit(&gen, node.id)
 		}
 		for _, guard := range node.guards {
 			t.visit(guard, node.id)
@@ -188,9 +188,6 @@ func (t Traverser[T]) visit(ast AST, parentId int) {
 		}
 	case *TyList:
 		t.visit(node.ty, node.id)
-	case *TyPrefixFunction:
-	case *TyPrefixList:
-	case *TyPrefixTuple:
 	case *TyVar:
 	case *TyForall:
 		for _, assertion := range node.assertions {
