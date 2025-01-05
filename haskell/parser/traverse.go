@@ -159,6 +159,7 @@ func (t Traverser[T]) visit(ast AST, parentId int) {
 	// Pattern
 	case *PWildcard:
 	case *PApp:
+		t.visit(&node.constructor, node.id)
 		for _, pat := range node.pats {
 			t.visit(pat, node.id)
 		}
@@ -174,6 +175,7 @@ func (t Traverser[T]) visit(ast AST, parentId int) {
 	case *PInfix:
 		t.visit(node.pat1, node.id)
 		t.visit(node.pat2, node.id)
+		t.visit(&node.op, node.id)
 	// Types
 	case *TyCon:
 	case *TyApp:

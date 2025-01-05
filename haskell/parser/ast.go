@@ -1,15 +1,16 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
-	"bytes"
 	"text/template"
 )
 
 type AST interface {
 	pretty() string
-	loc () Loc
+	Loc() Loc
+	Id() int
 }
 
 type Pat interface {
@@ -52,13 +53,13 @@ type Loc struct {
 func mergeLoc(l1 Loc, l2 Loc) Loc {
 	return Loc{
 		fromLine: l1.fromLine,
-		toLine: l1.toLine,
-		fromCol: l2.fromCol,
-		toCol: l2.toCol,
+		toLine:   l1.toLine,
+		fromCol:  l2.fromCol,
+		toCol:    l2.toCol,
 	}
 }
 
-var noloc = Loc {
+var noloc = Loc{
 	0, 0, 0, 0,
 }
 
@@ -68,7 +69,8 @@ type Node struct {
 }
 
 // Types
-//  TyCon
+//
+//	TyCon
 type TyCon struct {
 	name      string
 	module    string
@@ -79,9 +81,10 @@ type TyCon struct {
 
 func (*TyCon) isType()        {}
 func (*TyCon) pretty() string { return "" }
-func (n *TyCon) loc() Loc {return n.Node.loc}
+func (n *TyCon) Loc() Loc     { return n.Node.loc }
+func (n *TyCon) Id() int      { return n.Node.id }
 
-//  TyApp
+// TyApp
 type TyApp struct {
 	ty1   Type
 	ty2   Type
@@ -91,9 +94,10 @@ type TyApp struct {
 
 func (*TyApp) isType()        {}
 func (*TyApp) pretty() string { return "" }
-func (n *TyApp) loc() Loc {return n.Node.loc}
+func (n *TyApp) Loc() Loc     { return n.Node.loc }
+func (n *TyApp) Id() int      { return n.Node.id }
 
-//  TyFunction
+// TyFunction
 type TyFunction struct {
 	ty1   Type
 	ty2   Type
@@ -103,9 +107,10 @@ type TyFunction struct {
 
 func (*TyFunction) isType()        {}
 func (*TyFunction) pretty() string { return "" }
-func (n *TyFunction) loc() Loc {return n.Node.loc}
+func (n *TyFunction) Loc() Loc     { return n.Node.loc }
+func (n *TyFunction) Id() int      { return n.Node.id }
 
-//  TyTuple
+// TyTuple
 type TyTuple struct {
 	tys   []Type
 	axiom bool
@@ -114,9 +119,10 @@ type TyTuple struct {
 
 func (*TyTuple) isType()        {}
 func (*TyTuple) pretty() string { return "" }
-func (n *TyTuple) loc() Loc {return n.Node.loc}
+func (n *TyTuple) Loc() Loc     { return n.Node.loc }
+func (n *TyTuple) Id() int      { return n.Node.id }
 
-//  TyList
+// TyList
 type TyList struct {
 	ty    Type
 	axiom bool
@@ -125,10 +131,10 @@ type TyList struct {
 
 func (*TyList) isType()        {}
 func (*TyList) pretty() string { return "" }
-func (n *TyList) loc() Loc {return n.Node.loc}
+func (n *TyList) Loc() Loc     { return n.Node.loc }
+func (n *TyList) Id() int      { return n.Node.id }
 
-
-//  TyVar
+// TyVar
 type TyVar struct {
 	name      string
 	canonical string
@@ -138,9 +144,10 @@ type TyVar struct {
 
 func (*TyVar) isType()        {}
 func (*TyVar) pretty() string { return "" }
-func (n *TyVar) loc() Loc {return n.Node.loc}
+func (n *TyVar) Loc() Loc     { return n.Node.loc }
+func (n *TyVar) Id() int      { return n.Node.id }
 
-//  TyForall
+// TyForall
 type TyForall struct {
 	assertions []Type
 	ty         Type
@@ -150,32 +157,34 @@ type TyForall struct {
 
 func (*TyForall) isType()        {}
 func (*TyForall) pretty() string { return "" }
-func (n *TyForall) loc() Loc {return n.Node.loc}
+func (n *TyForall) Loc() Loc     { return n.Node.loc }
+func (n *TyForall) Id() int      { return n.Node.id }
 
 // Pattern
-//  PWildcard
+//
+//	PWildcard
 type PWildcard struct {
 	Node
 }
 
 func (*PWildcard) isPat()         {}
 func (*PWildcard) pretty() string { return "" }
-func (n *PWildcard) loc() Loc {return n.Node.loc}
+func (n *PWildcard) Loc() Loc     { return n.Node.loc }
+func (n *PWildcard) Id() int      { return n.Node.id }
 
-//  PApp
+// PApp
 type PApp struct {
-	name      string
-	module    string
-	canonical string
-	pats      []Pat
+	constructor PVar
+	pats        []Pat
 	Node
 }
 
 func (*PApp) isPat()         {}
 func (*PApp) pretty() string { return "" }
-func (n *PApp) loc() Loc {return n.Node.loc}
+func (n *PApp) Loc() Loc     { return n.Node.loc }
+func (n *PApp) Id() int      { return n.Node.id }
 
-//  PList
+// PList
 type PList struct {
 	pats []Pat
 	Node
@@ -183,9 +192,10 @@ type PList struct {
 
 func (*PList) isPat()         {}
 func (*PList) pretty() string { return "" }
-func (n *PList) loc() Loc {return n.Node.loc}
+func (n *PList) Loc() Loc     { return n.Node.loc }
+func (n *PList) Id() int      { return n.Node.id }
 
-//  PTuple
+// PTuple
 type PTuple struct {
 	pats []Pat
 	Node
@@ -193,32 +203,34 @@ type PTuple struct {
 
 func (*PTuple) isPat()         {}
 func (*PTuple) pretty() string { return "" }
-func (n *PTuple) loc() Loc {return n.Node.loc}
+func (n *PTuple) Loc() Loc     { return n.Node.loc }
+func (n *PTuple) Id() int      { return n.Node.id }
 
-//  PVar
+// PVar
 type PVar struct {
 	name      string
 	canonical string
+	module    string
 	Node
 }
 
-func (*PVar) isPat()         {}
+func (*PVar) isPat()            {}
 func (pv *PVar) pretty() string { return pv.name }
-func (n *PVar) loc() Loc {return n.Node.loc}
+func (n *PVar) Loc() Loc        { return n.Node.loc }
+func (n *PVar) Id() int         { return n.Node.id }
 
-//  PInfix
+// PInfix
 type PInfix struct {
-	pat1      Pat
-	name      string
-	module    string
-	canonical string
-	pat2      Pat
+	pat1 Pat
+	op   PVar
+	pat2 Pat
 	Node
 }
 
 func (*PInfix) isPat()         {}
 func (*PInfix) pretty() string { return "" }
-func (n *PInfix) loc() Loc {return n.Node.loc}
+func (n *PInfix) Loc() Loc     { return n.Node.loc }
+func (n *PInfix) Id() int      { return n.Node.id }
 
 // ExpVar
 type ExpVar struct {
@@ -228,14 +240,15 @@ type ExpVar struct {
 	Node
 }
 
-func (*ExpVar) isExp()         {}
+func (*ExpVar) isExp() {}
 func (v *ExpVar) pretty() string {
 	if v.name == "unit" {
 		return "()"
 	}
 	return v.name
 }
-func (n *ExpVar) loc() Loc {return n.Node.loc}
+func (n *ExpVar) Loc() Loc { return n.Node.loc }
+func (n *ExpVar) Id() int  { return n.Node.id }
 
 // ExpCon
 // type ExpCon struct {
@@ -245,7 +258,6 @@ func (n *ExpVar) loc() Loc {return n.Node.loc}
 // 	Node
 // }
 
-
 // func (*ExpCon) isExp()         {}
 // func (c *ExpCon) pretty() string {
 // 	if c.name == "unit" {
@@ -253,8 +265,7 @@ func (n *ExpVar) loc() Loc {return n.Node.loc}
 // 	}
 // 	return c.name
 // }
-// func (n *ExpCon) loc() Loc {return n.Node.loc}
-
+// func (n *ExpCon) Loc() Loc {return n.Node.loc}
 
 // ExpApp
 type ExpApp struct {
@@ -263,13 +274,14 @@ type ExpApp struct {
 	Node
 }
 
-func (*ExpApp) isExp()         {}
+func (*ExpApp) isExp() {}
 func (e *ExpApp) pretty() string {
 	return "(" + e.exp1.pretty() + " " + e.exp2.pretty() + ")"
 }
-func (n *ExpApp) loc() Loc {return n.Node.loc}
+func (n *ExpApp) Loc() Loc { return n.Node.loc }
+func (n *ExpApp) Id() int  { return n.Node.id }
 
-//  ExpInfix
+// ExpInfix
 type ExpInfix struct {
 	exp1 Exp
 	exp2 Exp
@@ -277,31 +289,33 @@ type ExpInfix struct {
 	Node
 }
 
-func (*ExpInfix) isExp()         {}
+func (*ExpInfix) isExp() {}
 func (ei *ExpInfix) pretty() string {
 	return fmt.Sprintf("(%s %s %s)", ei.exp1.pretty(), ei.op.pretty(), ei.exp2.pretty())
 }
-func (n *ExpInfix) loc() Loc {return n.Node.loc}
+func (n *ExpInfix) Loc() Loc { return n.Node.loc }
+func (n *ExpInfix) Id() int  { return n.Node.id }
 
-//  ExpLambda
+// ExpLambda
 type ExpLambda struct {
 	pats []Pat
 	exp  Exp
 	Node
 }
 
-func (*ExpLambda) isExp()         {}
+func (*ExpLambda) isExp() {}
 func (e *ExpLambda) pretty() string {
 	pats := make([]string, len(e.pats))
 	for i, pat := range e.pats {
 		pats[i] = pat.pretty()
 	}
 
-	return "(\\"+ strings.Join(pats, " ") + " -> " + e.exp.pretty() + ")"
+	return "(\\" + strings.Join(pats, " ") + " -> " + e.exp.pretty() + ")"
 }
-func (n *ExpLambda) loc() Loc {return n.Node.loc}
+func (n *ExpLambda) Loc() Loc { return n.Node.loc }
+func (n *ExpLambda) Id() int  { return n.Node.id }
 
-//  ExpLet
+// ExpLet
 type ExpLet struct {
 	binds []Decl
 	exp   Exp
@@ -310,9 +324,10 @@ type ExpLet struct {
 
 func (*ExpLet) isExp()         {}
 func (*ExpLet) pretty() string { return "" }
-func (n *ExpLet) loc() Loc {return n.Node.loc}
+func (n *ExpLet) Loc() Loc     { return n.Node.loc }
+func (n *ExpLet) Id() int      { return n.Node.id }
 
-//  ExpIf
+// ExpIf
 type ExpIf struct {
 	cond    Exp
 	ifTrue  Exp
@@ -320,15 +335,16 @@ type ExpIf struct {
 	Node
 }
 
-func (*ExpIf) isExp()         {}
+func (*ExpIf) isExp() {}
 func (e *ExpIf) pretty() string {
 	return "if " + e.cond.pretty() +
 		" then " + e.ifTrue.pretty() +
 		" else " + e.ifFalse.pretty()
 }
-func (n *ExpIf) loc() Loc {return n.Node.loc}
+func (n *ExpIf) Loc() Loc { return n.Node.loc }
+func (n *ExpIf) Id() int  { return n.Node.id }
 
-//  ExpDo
+// ExpDo
 type ExpDo struct {
 	stmts []Statement
 	Node
@@ -336,9 +352,10 @@ type ExpDo struct {
 
 func (*ExpDo) isExp()         {}
 func (*ExpDo) pretty() string { return "" }
-func (n *ExpDo) loc() Loc {return n.Node.loc}
+func (n *ExpDo) Loc() Loc     { return n.Node.loc }
+func (n *ExpDo) Id() int      { return n.Node.id }
 
-//  ExpCase
+// ExpCase
 type ExpCase struct {
 	exp  Exp
 	alts []Alt
@@ -347,9 +364,10 @@ type ExpCase struct {
 
 func (*ExpCase) isExp()         {}
 func (*ExpCase) pretty() string { return "" }
-func (n *ExpCase) loc() Loc {return n.Node.loc}
+func (n *ExpCase) Loc() Loc     { return n.Node.loc }
+func (n *ExpCase) Id() int      { return n.Node.id }
 
-//  ExpTuple
+// ExpTuple
 type ExpTuple struct {
 	exps []Exp
 	Node
@@ -357,9 +375,10 @@ type ExpTuple struct {
 
 func (*ExpTuple) isExp()         {}
 func (*ExpTuple) pretty() string { return "" }
-func (n *ExpTuple) loc() Loc {return n.Node.loc}
+func (n *ExpTuple) Loc() Loc     { return n.Node.loc }
+func (n *ExpTuple) Id() int      { return n.Node.id }
 
-//  ExpList
+// ExpList
 type ExpList struct {
 	exps []Exp
 	Node
@@ -367,9 +386,10 @@ type ExpList struct {
 
 func (*ExpList) isExp()         {}
 func (*ExpList) pretty() string { return "" }
-func (n *ExpList) loc() Loc {return n.Node.loc}
+func (n *ExpList) Loc() Loc     { return n.Node.loc }
+func (n *ExpList) Id() int      { return n.Node.id }
 
-//  ExpLeftSection
+// ExpLeftSection
 type ExpLeftSection struct {
 	left Exp
 	op   Exp
@@ -378,9 +398,10 @@ type ExpLeftSection struct {
 
 func (*ExpLeftSection) isExp()         {}
 func (*ExpLeftSection) pretty() string { return "" }
-func (n *ExpLeftSection) loc() Loc {return n.Node.loc}
+func (n *ExpLeftSection) Loc() Loc     { return n.Node.loc }
+func (n *ExpLeftSection) Id() int      { return n.Node.id }
 
-//  ExpRightSection
+// ExpRightSection
 type ExpRightSection struct {
 	right Exp
 	op    Exp
@@ -389,8 +410,10 @@ type ExpRightSection struct {
 
 func (*ExpRightSection) isExp()         {}
 func (*ExpRightSection) pretty() string { return "" }
-func (n *ExpRightSection) loc() Loc {return n.Node.loc}
-//  ExpEnumFromTo
+func (n *ExpRightSection) Loc() Loc     { return n.Node.loc }
+func (n *ExpRightSection) Id() int      { return n.Node.id }
+
+// ExpEnumFromTo
 type ExpEnumFromTo struct {
 	exp1 Exp
 	exp2 Exp
@@ -399,9 +422,10 @@ type ExpEnumFromTo struct {
 
 func (*ExpEnumFromTo) isExp()         {}
 func (*ExpEnumFromTo) pretty() string { return "" }
-func (n *ExpEnumFromTo) loc() Loc {return n.Node.loc}
+func (n *ExpEnumFromTo) Loc() Loc     { return n.Node.loc }
+func (n *ExpEnumFromTo) Id() int      { return n.Node.id }
 
-//  ExpEnumFrom
+// ExpEnumFrom
 type ExpEnumFrom struct {
 	exp Exp
 	Node
@@ -409,25 +433,26 @@ type ExpEnumFrom struct {
 
 func (*ExpEnumFrom) isExp()         {}
 func (*ExpEnumFrom) pretty() string { return "" }
-func (n *ExpEnumFrom) loc() Loc {return n.Node.loc}
+func (n *ExpEnumFrom) Loc() Loc     { return n.Node.loc }
+func (n *ExpEnumFrom) Id() int      { return n.Node.id }
 
-//  ExpComprehension
+// ExpComprehension
 type ExpComprehension struct {
-	exp         Exp
-	generators  []Generator
-	guards      []Exp
+	exp        Exp
+	generators []Generator
+	guards     []Exp
 	Node
 }
 
 func (*ExpComprehension) isExp()         {}
 func (*ExpComprehension) pretty() string { return "" }
-func (n *ExpComprehension) loc() Loc {return n.Node.loc}
+func (n *ExpComprehension) Loc() Loc     { return n.Node.loc }
+func (n *ExpComprehension) Id() int      { return n.Node.id }
 
-
-//  Lit
+// Lit
 type Lit struct {
-	lit string // integer/char/string/float
-  content string
+	lit     string // integer/char/string/float
+	content string
 	Node
 }
 
@@ -445,55 +470,61 @@ func (l *Lit) pretty() string {
 		panic("Unknown kind of Lit: " + l.lit)
 	}
 }
-func (n *Lit) loc() Loc {return n.Node.loc}
+func (n *Lit) Loc() Loc { return n.Node.loc }
+func (n *Lit) Id() int  { return n.Node.id }
 
 // RHS
-//  UnguardedRhs
+//
+//	UnguardedRhs
 type UnguardedRhs struct {
 	exp    Exp
 	wheres []Decl
 	Node
 }
 
-func (*UnguardedRhs) isRhs()         {}
+func (*UnguardedRhs) isRhs() {}
 func (ur *UnguardedRhs) pretty() string {
 	wheres := make([]string, len(ur.wheres))
 	for i, where := range ur.wheres {
 		wheres[i] = where.pretty()
 	}
 	return render(`{{.Exp -}} {{ if gt (len .Wheres) 0}} where {{range .Wheres}} {{ . -}}; {{end}}{{end}}`, "UnguardedRhs", struct {
-		Exp string
+		Exp    string
 		Wheres []string
 	}{
-		Exp: ur.exp.pretty(),
+		Exp:    ur.exp.pretty(),
 		Wheres: wheres,
 	})
 }
-func (n *UnguardedRhs) loc() Loc {return n.Node.loc}
+func (n *UnguardedRhs) Loc() Loc { return n.Node.loc }
+func (n *UnguardedRhs) Id() int  { return n.Node.id }
 
-//  GuardedRhs
+// GuardedRhs
 type GuardedRhs struct {
-  branches []GuardBranch
-	wheres []Decl
+	branches []GuardBranch
+	wheres   []Decl
 	Node
 }
 
 func (*GuardedRhs) isRhs()         {}
 func (*GuardedRhs) pretty() string { return "" }
-func (n *GuardedRhs) loc() Loc {return n.Node.loc}
+func (n *GuardedRhs) Loc() Loc     { return n.Node.loc }
+func (n *GuardedRhs) Id() int      { return n.Node.id }
 
-//  GuardBranch
+// GuardBranch
 type GuardBranch struct {
-	exp Exp
+	exp    Exp
 	guards []Exp
 	Node
 }
+
 func (*GuardBranch) pretty() string { return "" }
-func (n *GuardBranch) loc() Loc {return n.Node.loc}
+func (n *GuardBranch) Loc() Loc     { return n.Node.loc }
+func (n *GuardBranch) Id() int      { return n.Node.id }
 
 // Statements
 
-//  Generator
+// Generator
 type Generator struct {
 	pat Pat
 	exp Exp
@@ -502,9 +533,10 @@ type Generator struct {
 
 func (*Generator) isStatement()   {}
 func (*Generator) pretty() string { return "" }
-func (n *Generator) loc() Loc {return n.Node.loc}
+func (n *Generator) Loc() Loc     { return n.Node.loc }
+func (n *Generator) Id() int      { return n.Node.id }
 
-//  Qualifier
+// Qualifier
 type Qualifier struct {
 	exp Exp
 	Node
@@ -512,9 +544,10 @@ type Qualifier struct {
 
 func (*Qualifier) isStatement()   {}
 func (*Qualifier) pretty() string { return "" }
-func (n *Qualifier) loc() Loc {return n.Node.loc}
+func (n *Qualifier) Loc() Loc     { return n.Node.loc }
+func (n *Qualifier) Id() int      { return n.Node.id }
 
-//  LetStmt
+// LetStmt
 type LetStmt struct {
 	binds []Decl
 	Node
@@ -522,11 +555,12 @@ type LetStmt struct {
 
 func (*LetStmt) isStatement()   {}
 func (*LetStmt) pretty() string { return "" }
-func (n *LetStmt) loc() Loc {return n.Node.loc}
+func (n *LetStmt) Loc() Loc     { return n.Node.loc }
+func (n *LetStmt) Id() int      { return n.Node.id }
 
 // Declarations
 
-//  TypeDecl
+// TypeDecl
 type TypeDecl struct {
 	dHead DeclHead
 	ty    Type
@@ -535,9 +569,10 @@ type TypeDecl struct {
 
 func (*TypeDecl) isDecl()        {}
 func (*TypeDecl) pretty() string { return "" }
-func (n *TypeDecl) loc() Loc {return n.Node.loc}
+func (n *TypeDecl) Loc() Loc     { return n.Node.loc }
+func (n *TypeDecl) Id() int      { return n.Node.id }
 
-//  DataDecl
+// DataDecl
 type DataDecl struct {
 	dHead        DeclHead
 	constructors []DataCon
@@ -547,9 +582,10 @@ type DataDecl struct {
 
 func (*DataDecl) isDecl()        {}
 func (*DataDecl) pretty() string { return "" }
-func (n *DataDecl) loc() Loc {return n.Node.loc}
+func (n *DataDecl) Loc() Loc     { return n.Node.loc }
+func (n *DataDecl) Id() int      { return n.Node.id }
 
-//  ClassDecl
+// ClassDecl
 type ClassDecl struct {
 	assertions []Type
 	dHead      DeclHead
@@ -559,9 +595,10 @@ type ClassDecl struct {
 
 func (*ClassDecl) isDecl()        {}
 func (*ClassDecl) pretty() string { return "" }
-func (n *ClassDecl) loc() Loc {return n.Node.loc}
+func (n *ClassDecl) Loc() Loc     { return n.Node.loc }
+func (n *ClassDecl) Id() int      { return n.Node.id }
 
-//  InstDecl
+// InstDecl
 type InstDecl struct {
 	assertions []Type
 	name       string
@@ -574,22 +611,24 @@ type InstDecl struct {
 
 func (*InstDecl) isDecl()        {}
 func (*InstDecl) pretty() string { return "" }
-func (n *InstDecl) loc() Loc {return n.Node.loc}
+func (n *InstDecl) Loc() Loc     { return n.Node.loc }
+func (n *InstDecl) Id() int      { return n.Node.id }
 
-//  PatBind
+// PatBind
 type PatBind struct {
 	pat Pat
 	rhs Rhs
 	Node
 }
 
-func (*PatBind) isDecl()        {}
+func (*PatBind) isDecl() {}
 func (pb *PatBind) pretty() string {
 	return pb.pat.pretty() + " = " + pb.rhs.pretty()
 }
-func (n *PatBind) loc() Loc {return n.Node.loc}
+func (n *PatBind) Loc() Loc { return n.Node.loc }
+func (n *PatBind) Id() int  { return n.Node.id }
 
-//  TypeSig
+// TypeSig
 type TypeSig struct {
 	names      []string
 	canonicals []string
@@ -599,11 +638,12 @@ type TypeSig struct {
 
 func (*TypeSig) isDecl()        {}
 func (*TypeSig) pretty() string { return "" }
-func (n *TypeSig) loc() Loc {return n.Node.loc}
+func (n *TypeSig) Loc() Loc     { return n.Node.loc }
+func (n *TypeSig) Id() int      { return n.Node.id }
 
 // Misc
 
-//  Alt
+// Alt
 type Alt struct {
 	pat   Pat
 	exp   Exp
@@ -612,9 +652,10 @@ type Alt struct {
 }
 
 func (*Alt) pretty() string { return "" }
-func (n *Alt) loc() Loc {return n.Node.loc}
+func (n *Alt) Loc() Loc     { return n.Node.loc }
+func (n *Alt) Id() int      { return n.Node.id }
 
-//  DataCon
+// DataCon
 type DataCon struct {
 	name      string
 	canonical string
@@ -623,9 +664,10 @@ type DataCon struct {
 }
 
 func (*DataCon) pretty() string { return "" }
-func (n *DataCon) loc() Loc {return n.Node.loc}
+func (n *DataCon) Loc() Loc     { return n.Node.loc }
+func (n *DataCon) Id() int      { return n.Node.id }
 
-//  DeclHead
+// DeclHead
 type DeclHead struct {
 	name      string
 	canonical string
@@ -634,9 +676,10 @@ type DeclHead struct {
 }
 
 func (*DeclHead) pretty() string { return "" }
-func (n *DeclHead) loc() Loc {return n.Node.loc}
+func (n *DeclHead) Loc() Loc     { return n.Node.loc }
+func (n *DeclHead) Id() int      { return n.Node.id }
 
-//  Module
+// Module
 type Module struct {
 	name    string
 	decls   []Decl
@@ -655,19 +698,20 @@ func (m *Module) pretty() string {
 		decls[i] = decl.pretty()
 	}
 	return render(t, "module", struct {
-		Name string
+		Name  string
 		Decls []string
 	}{
 		m.name, decls,
 	})
 }
-func (n *Module) loc() Loc {return n.Node.loc}
+func (n *Module) Loc() Loc { return n.Node.loc }
+func (n *Module) Id() int  { return n.Node.id }
 
 func render(temp string, name string, data any) string {
 	var buf bytes.Buffer
 
 	t := template.Must(template.New(name).Parse(temp))
-  if err := t.Execute(&buf, data); err != nil {
+	if err := t.Execute(&buf, data); err != nil {
 		panic(err)
 	}
 	return buf.String()
