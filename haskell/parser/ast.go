@@ -362,10 +362,18 @@ type ExpCase struct {
 	Node
 }
 
-func (*ExpCase) isExp()         {}
-func (*ExpCase) pretty() string { return "" }
-func (n *ExpCase) Loc() Loc     { return n.Node.loc }
-func (n *ExpCase) Id() int      { return n.Node.id }
+func (*ExpCase) isExp() {}
+func (ec *ExpCase) pretty() string {
+	alts := make([]string, len(ec.alts))
+	for i, alt := range ec.alts {
+		alts[i] = alt.pretty()
+	}
+	altsJoined := strings.Join(alts, "; ")
+	return "case " + ec.exp.pretty() + " of " + altsJoined
+}
+
+func (n *ExpCase) Loc() Loc { return n.Node.loc }
+func (n *ExpCase) Id() int  { return n.Node.id }
 
 // ExpTuple
 type ExpTuple struct {
@@ -651,9 +659,16 @@ type Alt struct {
 	Node
 }
 
-func (*Alt) pretty() string { return "" }
-func (n *Alt) Loc() Loc     { return n.Node.loc }
-func (n *Alt) Id() int      { return n.Node.id }
+func (a *Alt) pretty() string {
+	bindStrs := make([]string, len(a.binds))
+	for i, b := range a.binds {
+		bindStrs[i] = b.pretty()
+	}
+	bindStr := strings.Join(bindStrs, "; ")
+	return a.pat.pretty() + " -> " + a.exp.pretty() + "where" + bindStr
+}
+func (n *Alt) Loc() Loc { return n.Node.loc }
+func (n *Alt) Id() int  { return n.Node.id }
 
 // DataCon
 type DataCon struct {
