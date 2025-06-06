@@ -66,15 +66,17 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		} else {
 			nameNodes = []treesitter.Node{*pe.child(node, "name")}
 		}
+
 		names := make([]string, len(nameNodes))
 		for i, nameNode := range nameNodes {
 			switch nameNode.Kind() {
 			case "prefix_id":
 				names[i] = pe.text(nameNode.NamedChild(0))
 			default:
-				names[i] = pe.text(node)
+				names[i] = pe.text(&nameNode)
 			}
 		}
+
 		ty := pe.parseType(pe.child(node, "type"))
 		return Decl(&TypeSig{
 			names:      names,
@@ -481,9 +483,11 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			exp2: pe.parseExp(node.Child(1)),
 			Node: pe.node(node),
 		})
+
 	case "left_section":
 		left := pe.parseExp(pe.child(node, "left_operand"))
-		op := pe.parseExp(pe.child(node, "operator"))
+	  operator := pe.child(node, "operator")
+    op := pe.parseExp(operator)
 		return Exp(&ExpLeftSection{
 			left: left,
 			op:   op,
@@ -491,7 +495,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		})
 	case "right_section":
 		right := pe.parseExp(pe.child(node, "right_operand"))
-		op := pe.parseExp(pe.child(node, "operator"))
+    operator := node.NamedChild(0)
+		op := pe.parseExp(operator)
 		return Exp(&ExpRightSection{
 			right: right,
 			op:    op,
@@ -633,6 +638,7 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		return Exp(&ExpComprehension{
 			exp:        exp,
 			generators: generators,
+			guards:     guards,
 			Node:       pe.node(node),
 		})
 

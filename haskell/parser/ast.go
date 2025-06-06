@@ -80,7 +80,7 @@ type TyCon struct {
 }
 
 func (*TyCon) isType()        {}
-func (*TyCon) pretty() string { return "" }
+func (t *TyCon) pretty() string { return t.name }
 func (n *TyCon) Loc() Loc     { return n.Node.loc }
 func (n *TyCon) Id() int      { return n.Node.id }
 
@@ -106,7 +106,9 @@ type TyFunction struct {
 }
 
 func (*TyFunction) isType()        {}
-func (*TyFunction) pretty() string { return "" }
+func (t *TyFunction) pretty() string {
+	return t.ty1.pretty() + " -> (" + t.ty2.pretty() + ")"
+}
 func (n *TyFunction) Loc() Loc     { return n.Node.loc }
 func (n *TyFunction) Id() int      { return n.Node.id }
 
@@ -143,7 +145,7 @@ type TyVar struct {
 }
 
 func (*TyVar) isType()        {}
-func (*TyVar) pretty() string { return "" }
+func (t *TyVar) pretty() string { return t.name }
 func (n *TyVar) Loc() Loc     { return n.Node.loc }
 func (n *TyVar) Id() int      { return n.Node.id }
 
@@ -323,7 +325,14 @@ type ExpLet struct {
 }
 
 func (*ExpLet) isExp()         {}
-func (*ExpLet) pretty() string { return "" }
+func (e *ExpLet) pretty() string {
+	bindStrs := make([]string, len(e.binds))
+	for i, bind := range e.binds {
+			bindStrs[i] = bind.pretty()
+	}
+	bindStr := "{" + strings.Join(bindStrs, "; ") + "}"
+	return "let " + bindStr + " in " + e.exp.pretty()
+}
 func (n *ExpLet) Loc() Loc     { return n.Node.loc }
 func (n *ExpLet) Id() int      { return n.Node.id }
 
@@ -351,7 +360,14 @@ type ExpDo struct {
 }
 
 func (*ExpDo) isExp()         {}
-func (*ExpDo) pretty() string { return "" }
+func (e *ExpDo) pretty() string {
+	stmtStrs := make([]string, len(e.stmts))
+	for i, stmt := range e.stmts {
+		stmtStrs[i] = stmt.pretty()
+	}
+	stmtStr := strings.Join(stmtStrs, "; ")
+	return "do {" + stmtStr + "}"
+}
 func (n *ExpDo) Loc() Loc     { return n.Node.loc }
 func (n *ExpDo) Id() int      { return n.Node.id }
 
@@ -382,7 +398,14 @@ type ExpTuple struct {
 }
 
 func (*ExpTuple) isExp()         {}
-func (*ExpTuple) pretty() string { return "" }
+func (e *ExpTuple) pretty() string {
+	expStrs := make([]string, len(e.exps))
+	for i, exp := range e.exps {
+		expStrs[i] = exp.pretty()
+	}
+	expStr := strings.Join(expStrs, ", ")
+	return "(" + expStr + ")"
+}
 func (n *ExpTuple) Loc() Loc     { return n.Node.loc }
 func (n *ExpTuple) Id() int      { return n.Node.id }
 
@@ -393,7 +416,14 @@ type ExpList struct {
 }
 
 func (*ExpList) isExp()         {}
-func (*ExpList) pretty() string { return "" }
+func (e *ExpList) pretty() string {
+	expStrs := make([]string, len(e.exps))
+	for i, exp := range e.exps {
+		expStrs[i] = exp.pretty()
+	}
+	expStr := strings.Join(expStrs, ", ")
+	return "[" + expStr + "]"
+}
 func (n *ExpList) Loc() Loc     { return n.Node.loc }
 func (n *ExpList) Id() int      { return n.Node.id }
 
@@ -405,7 +435,9 @@ type ExpLeftSection struct {
 }
 
 func (*ExpLeftSection) isExp()         {}
-func (*ExpLeftSection) pretty() string { return "" }
+func (e *ExpLeftSection) pretty() string {
+	return "(" + e.left.pretty() + " " + e.op.pretty() + ")"
+}
 func (n *ExpLeftSection) Loc() Loc     { return n.Node.loc }
 func (n *ExpLeftSection) Id() int      { return n.Node.id }
 
@@ -417,7 +449,9 @@ type ExpRightSection struct {
 }
 
 func (*ExpRightSection) isExp()         {}
-func (*ExpRightSection) pretty() string { return "" }
+func (e *ExpRightSection) pretty() string {
+	return "(" + e.op.pretty() + " " + e.right.pretty() + ")"
+}
 func (n *ExpRightSection) Loc() Loc     { return n.Node.loc }
 func (n *ExpRightSection) Id() int      { return n.Node.id }
 
@@ -429,7 +463,9 @@ type ExpEnumFromTo struct {
 }
 
 func (*ExpEnumFromTo) isExp()         {}
-func (*ExpEnumFromTo) pretty() string { return "" }
+func (e *ExpEnumFromTo) pretty() string {
+	return "[" + e.exp1.pretty() + ".." + e.exp2.pretty() + "]"
+}
 func (n *ExpEnumFromTo) Loc() Loc     { return n.Node.loc }
 func (n *ExpEnumFromTo) Id() int      { return n.Node.id }
 
@@ -440,7 +476,9 @@ type ExpEnumFrom struct {
 }
 
 func (*ExpEnumFrom) isExp()         {}
-func (*ExpEnumFrom) pretty() string { return "" }
+func (e *ExpEnumFrom) pretty() string {
+	return "[" + e.exp.pretty() + ".." + "]"
+}
 func (n *ExpEnumFrom) Loc() Loc     { return n.Node.loc }
 func (n *ExpEnumFrom) Id() int      { return n.Node.id }
 
@@ -452,8 +490,20 @@ type ExpComprehension struct {
 	Node
 }
 
-func (*ExpComprehension) isExp()         {}
-func (*ExpComprehension) pretty() string { return "" }
+func (*ExpComprehension) isExp() {}
+func (e *ExpComprehension) pretty() string {
+	generatorStrs := make([]string, len(e.generators))
+	guardStrs := make([]string, len(e.guards))
+	for i, generator := range e.generators {
+		generatorStrs[i] = generator.pretty()
+	}
+	for i, guard := range e.guards {
+		guardStrs[i] = guard.pretty()
+	}
+	s := strings.Join(append(generatorStrs, guardStrs...), ", ")
+	return "[" + e.exp.pretty() + " | " + s + "]"
+
+}
 func (n *ExpComprehension) Loc() Loc     { return n.Node.loc }
 func (n *ExpComprehension) Id() int      { return n.Node.id }
 
@@ -540,7 +590,9 @@ type Generator struct {
 }
 
 func (*Generator) isStatement()   {}
-func (*Generator) pretty() string { return "" }
+func (g *Generator) pretty() string {
+	return g.pat.pretty() + " <- " + g.exp.pretty()
+}
 func (n *Generator) Loc() Loc     { return n.Node.loc }
 func (n *Generator) Id() int      { return n.Node.id }
 
@@ -551,7 +603,7 @@ type Qualifier struct {
 }
 
 func (*Qualifier) isStatement()   {}
-func (*Qualifier) pretty() string { return "" }
+func (q *Qualifier) pretty() string { return q.exp.pretty() }
 func (n *Qualifier) Loc() Loc     { return n.Node.loc }
 func (n *Qualifier) Id() int      { return n.Node.id }
 
@@ -562,7 +614,13 @@ type LetStmt struct {
 }
 
 func (*LetStmt) isStatement()   {}
-func (*LetStmt) pretty() string { return "" }
+func (l *LetStmt) pretty() string {
+	bindStrs := make([]string, len(l.binds))
+	for i, bind := range l.binds {
+		bindStrs[i] = bind.pretty()
+	}
+	return "let " + strings.Join(bindStrs, "; ")
+}
 func (n *LetStmt) Loc() Loc     { return n.Node.loc }
 func (n *LetStmt) Id() int      { return n.Node.id }
 
@@ -645,7 +703,10 @@ type TypeSig struct {
 }
 
 func (*TypeSig) isDecl()        {}
-func (*TypeSig) pretty() string { return "" }
+func (t *TypeSig) pretty() string {
+	return strings.Join(t.names, ", ") + " :: " + t.ty.pretty()
+}
+
 func (n *TypeSig) Loc() Loc     { return n.Node.loc }
 func (n *TypeSig) Id() int      { return n.Node.id }
 
@@ -660,13 +721,17 @@ type Alt struct {
 }
 
 func (a *Alt) pretty() string {
-	bindStrs := make([]string, len(a.binds))
-	for i, b := range a.binds {
-		bindStrs[i] = b.pretty()
+	var bindStr string = "";
+	if len(a.binds) > 0 {
+		bindStrs := make([]string, len(a.binds))
+		for i, b := range a.binds {
+			bindStrs[i] = b.pretty()
+		}
+		bindStr = " where {" + strings.Join(bindStrs, "; ") + "}"
 	}
-	bindStr := strings.Join(bindStrs, "; ")
-	return a.pat.pretty() + " -> " + a.exp.pretty() + "where" + bindStr
+	return a.pat.pretty() + " -> " + a.exp.pretty() + bindStr
 }
+
 func (n *Alt) Loc() Loc { return n.Node.loc }
 func (n *Alt) Id() int  { return n.Node.id }
 
