@@ -176,7 +176,7 @@ func parse(code []byte, altname string) *Module {
 }
 
 func Main() {
-	code := []byte("module Main where")
+	code := []byte("type X = String")
 
 	parser := treesitter.NewParser()
 	defer parser.Close()

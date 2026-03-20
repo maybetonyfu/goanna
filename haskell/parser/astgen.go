@@ -144,7 +144,7 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 	case "fixity":
 	case "type_synomym":
 		dHead := pe.parseDeclHead(node)
-		ty := pe.parseType(pe.child(node, "child"))
+		ty := pe.parseType(pe.child(node, "type"))
 		return Decl(&TypeDecl{
 			dHead: dHead,
 			ty:    ty,

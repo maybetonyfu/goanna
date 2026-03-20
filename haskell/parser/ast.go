@@ -120,7 +120,16 @@ type TyTuple struct {
 }
 
 func (*TyTuple) isType()        {}
-func (*TyTuple) pretty() string { return "" }
+func (t *TyTuple) pretty() string {
+	if len(t.tys) == 0 {
+		return "()"
+	}
+	parts := make([]string, len(t.tys))
+	for i, ty := range t.tys {
+		parts[i] = ty.pretty()
+	}
+	return "(" + strings.Join(parts, ", ") + ")"
+}
 func (n *TyTuple) Loc() Loc     { return n.Node.loc }
 func (n *TyTuple) Id() int      { return n.Node.id }
 
@@ -132,7 +141,9 @@ type TyList struct {
 }
 
 func (*TyList) isType()        {}
-func (*TyList) pretty() string { return "" }
+func (t *TyList) pretty() string {
+	return "[" + t.ty.pretty() + "]"
+}
 func (n *TyList) Loc() Loc     { return n.Node.loc }
 func (n *TyList) Id() int      { return n.Node.id }
 
@@ -634,7 +645,17 @@ type TypeDecl struct {
 }
 
 func (*TypeDecl) isDecl()        {}
-func (*TypeDecl) pretty() string { return "" }
+func (td *TypeDecl) pretty() string {
+	head := td.dHead.name
+	if len(td.dHead.typeVars) > 0 {
+		vars := make([]string, len(td.dHead.typeVars))
+		for i, v := range td.dHead.typeVars {
+			vars[i] = v.pretty()
+		}
+		head += " " + strings.Join(vars, " ")
+	}
+	return "type " + head + " = " + td.ty.pretty()
+}
 func (n *TypeDecl) Loc() Loc     { return n.Node.loc }
 func (n *TypeDecl) Id() int      { return n.Node.id }
 

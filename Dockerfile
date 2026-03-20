@@ -11,7 +11,7 @@ RUN go build -o goanna ./server
 FROM python:3.13-bookworm
 WORKDIR /root
 RUN pip install --upgrade pip
-COPY parser/requirements.txt ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY parser/ ./
