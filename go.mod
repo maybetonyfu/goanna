@@ -8,9 +8,10 @@ require (
 	github.com/deckarep/golang-set/v2 v2.6.0
 	github.com/ichiban/prolog v1.2.1
 	github.com/irifrance/gini v1.0.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tree-sitter/go-tree-sitter v0.24.0
 	github.com/tree-sitter/tree-sitter-haskell v0.23.1
+	github.com/urfave/cli/v3 v3.7.0
 )
 
 require (

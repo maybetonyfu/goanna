@@ -82,11 +82,33 @@ func TestType(t *testing.T) {
 		{"x, y :: a", "x, y :: a"}, // Multi Decl
 		{"x :: a -> b", "x :: a -> (b)"}, // Func
 		{"x :: a -> b -> c", "x :: a -> (b -> (c))"}, // Func
+		{"x :: ()", "x :: ()"}, // Unit type (top)
 	}
 
 	for _, tc := range cases {
 		output := parse([]byte(tc.input), "Main").pretty()
 		assert.Equal(t, withModule(tc.expect),output, "Output should equal expected")
+	}
+}
+
+func TestTypeApp(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{"x :: Maybe Int", "x :: (Maybe Int)"}, // Type application - Maybe with Int
+		{"x :: Either a b", "x :: ((Either a) b)"}, // Type application - Either with two type args
+		{"x :: List a", "x :: (List a)"}, // Single type parameter
+		{"x :: Map k v", "x :: ((Map k) v)"}, // Two type parameters
+		{"x :: Maybe (Maybe Int)", "x :: (Maybe (Maybe Int))"}, // Nested type application
+		{"x :: Either String Int", "x :: ((Either String) Int)"}, // Type app with concrete types
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
 	}
 }
 
@@ -159,8 +181,8 @@ func TestLiterals(t *testing.T) {
 	cases := []testcase{
 		{"x = 42", "x = 42"}, // Integer
 		{"x = 3.14", "x = 3.14"}, // Float
-		{"x = 'a'", "x = ''a''"}, // Char (parser includes quotes)
-		{"x = \"hello\"", "x = \"\"hello\"\""}, // String (parser includes quotes)
+		{"x = 'a'", "x = 'a'"}, // Char
+		{"x = \"hello\"", "x = \"hello\""}, // String
 		{"x = True", "x = True"}, // Boolean
 		{"x = False", "x = False"}, // Boolean
 	}
@@ -220,7 +242,7 @@ func TestEnumSequences(t *testing.T) {
 	cases := []testcase{
 		{"x = [1..10]", "x = [1..10]"}, // Enum from..to
 		{"x = [1..]", "x = [1..]"}, // Enum from..
-		{"x = ['a'..'z']", "x = [''a''..''z'']"}, // Char range (includes quotes)
+		{"x = ['a'..'z']", "x = ['a'..'z']"}, // Char range
 	}
 
 	for _, tc := range cases {
@@ -361,6 +383,94 @@ func TestSectionedOperators(t *testing.T) {
 	for _, tc := range cases {
 		output := parse([]byte(tc.input), "Main").pretty()
 		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
+func TestPAppPatterns(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{"f a = a", "f a = a"}, // Simple function with one argument
+		{"g x y = x + y", "g x y = (x + y)"}, // Function with two arguments
+		{"h (Just x) = x", "h (Just x) = x"}, // Pattern with constructor
+		{"add a b c = a + b + c", "add a b c = ((a + b) + c)"}, // Three arguments
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
+func TestGuardedRhs(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{
+			`f x
+  | x > 0 = 1
+  | otherwise = 0`,
+			"f x = | (x > 0) = 1 | otherwise = 0",
+		},
+		{
+			`abs x
+  | x < 0 = negate x
+  | otherwise = x`,
+			"abs x = | (x < 0) = (negate x) | otherwise = x",
+		},
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
+func TestDataDecl(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{"data Maybe a = Just a | Nothing", "data Maybe a = Just a | Nothing"},
+		{"data Either a b = Left a | Right b", "data Either a b = Left a | Right b"},
+		{"data Bool = True | False", "data Bool = True | False"},
+		{"data Bool = True | False deriving (Show)", "data Bool = True | False deriving (Show)"},
+		{"data Bool = True | False deriving (Show, Eq)", "data Bool = True | False deriving (Show, Eq)"},
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
+func TestImportStatements(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{"import Data.List", "import Data.List"}, // Simple import
+		{"import qualified Data.Map", "import qualified Data.Map"}, // Qualified import
+		{"import Data.Set as S", "import Data.Set as S"}, // Import with alias
+		{"import qualified Data.Vector as V", "import qualified Data.Vector as V"}, // Qualified with alias
+		{"import Data.Text (Text, pack)", "import Data.Text (Text, pack)"}, // Import specific items
+		{"import Data.Maybe hiding (catMaybes)", "import Data.Maybe hiding (catMaybes)"}, // Import hiding
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		// The output should contain the import statement
+		assert.Contains(t, output, tc.expect, "Output should contain the import statement")
 	}
 }
 

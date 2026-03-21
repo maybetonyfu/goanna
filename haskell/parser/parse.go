@@ -2,9 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 	treesitterhaskell "github.com/tree-sitter/tree-sitter-haskell/bindings/go"
-	"strings"
 )
 
 var fixity = map[string]int{
@@ -52,7 +53,7 @@ var associativity = map[string]string{
 }
 
 type parseEnv struct {
-	counter       int
+	counter       *int
 	source        []byte
 	cursor        *treesitter.TreeCursor
 	fixity        map[string]int
@@ -60,8 +61,8 @@ type parseEnv struct {
 }
 
 func (pe parseEnv) id() int {
-	id := pe.counter
-	pe.counter += 1
+	id := *pe.counter
+	*pe.counter += 1
 	return id
 }
 
@@ -144,9 +145,9 @@ func parse(code []byte, altname string) *Module {
 	tree := parser.Parse(code, nil)
 	root := tree.RootNode()
 	cursor := root.Walk()
-
+	initialCounter := 0
 	pe := parseEnv{
-		counter: 0,
+		counter: &initialCounter,
 		source:  code,
 		cursor:  cursor,
 		fixity: fixity,
@@ -161,36 +162,86 @@ func parse(code []byte, altname string) *Module {
 			moduleName = pe.text(node)
 		}
 	}
+
+	// Parse imports
+	importsNode := pe.child(root, "imports")
+	imports := []Import{}
+	if importsNode != nil {
+		iNodes := pe.children(importsNode, "import")
+		imports = make([]Import, len(iNodes))
+		for i, in := range iNodes {
+			imports[i] = pe.parseImport(&in)
+		}
+	}
+
 	dNodes := pe.children(root, "declarations:*")
-	decls := make([]Decl, len(dNodes))
-	for i, d := range dNodes {
-		decls[i] = pe.parseDecl(&d)
+	var decls []Decl
+	for _, d := range dNodes {
+		decl := pe.parseDecl(&d)
+		if decl != nil { // Filter out nil declarations (comments, etc.)
+			decls = append(decls, decl)
+		}
 	}
 
 	return &Module{
 		name:    moduleName,
 		decls:   decls,
-		imports: []string{},
+		imports: imports,
 		Node:    pe.node(root),
 	}
 }
 
-func Main() {
-	code := []byte("type X = String")
+// ParseFile reads a Haskell file, parses it, and prints the AST
+func ParseFile(filePath string) error {
+	// Read the file
+	code, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
 
+	// Extract module name from file path
+	moduleName := "Main"
+	if strings.Contains(filePath, "/") {
+		parts := strings.Split(filePath, "/")
+		moduleName = strings.TrimSuffix(parts[len(parts)-1], ".hs")
+	} else {
+		moduleName = strings.TrimSuffix(filePath, ".hs")
+	}
+
+	// Parse the module
+	module := parse(code, moduleName)
+
+	// Print the AST
+	if module == nil {
+		return fmt.Errorf("error parsing file")
+	}
+
+	fmt.Println(module.pretty())
+	return nil
+}
+
+// PrintSexp reads a Haskell file and prints the tree-sitter S-expression for debugging
+func PrintSexp(filePath string) error {
+	// Read the file
+	code, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("error reading file: %w", err)
+	}
+
+	// Create a tree-sitter parser
 	parser := treesitter.NewParser()
 	defer parser.Close()
 	parser.SetLanguage(treesitter.NewLanguage(treesitterhaskell.Language()))
 
+	// Parse the code
 	tree := parser.Parse(code, nil)
 	defer tree.Close()
 
+	// Get the root node and print its S-expression
 	root := tree.RootNode()
 	fmt.Println(root.ToSexp())
-	cursor := root.Walk()
-	pe := parseEnv{0, code, cursor, nil, nil}
-	decls := pe.children(root, "declarations:*")
-	for _, decl := range decls {
-		pe.parseDecl(&decl)
-	}
+
+	return nil
 }
+
+var _ = fmt.Append

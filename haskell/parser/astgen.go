@@ -20,6 +20,81 @@ func (pe parseEnv) parseDeclHead(node *treesitter.Node) DeclHead {
 	}
 }
 
+func (pe parseEnv) parseImport(node *treesitter.Node) Import {
+	// Get module name
+	moduleNode := pe.child(node, "module")
+	moduleName := ""
+	if moduleNode != nil {
+		moduleName = pe.text(moduleNode)
+	}
+
+	// Check if qualified by looking through all children (not just named ones)
+	qualified := false
+	cursor := node.Walk()
+	allChildren := node.Children(cursor)
+	for _, child := range allChildren {
+		if child.Kind() == "qualified" {
+			qualified = true
+			break
+		}
+	}
+
+	// Get alias if present (the module node after "as")
+	alias := ""
+	for i, child := range allChildren {
+		if child.Kind() == "as" && i+1 < len(allChildren) && allChildren[i+1].IsNamed() {
+			alias = pe.text(&allChildren[i+1])
+			break
+		}
+	}
+
+	// Check if hiding
+	hiding := false
+	for _, child := range allChildren {
+		if child.Kind() == "hiding" {
+			hiding = true
+			break
+		}
+	}
+
+	// Get import items list
+	var items []string
+	if itemsNode := pe.child(node, "names"); itemsNode != nil {
+		// Get the items (import_name nodes) from the field "name"
+		itemNodes := pe.children(itemsNode, "name")
+		items = make([]string, len(itemNodes))
+		for i, itemNode := range itemNodes {
+			// Get the name from inside the import_name
+			// The import_name structure has either a name, variable, or type child
+			var nameStr string
+			nameNode := pe.child(&itemNode, "name")
+			if nameNode != nil {
+				nameStr = pe.text(nameNode)
+			} else {
+				nameNode = pe.child(&itemNode, "variable")
+				if nameNode != nil {
+					nameStr = pe.text(nameNode)
+				} else {
+					nameNode = pe.child(&itemNode, "type")
+					if nameNode != nil {
+						nameStr = pe.text(nameNode)
+					}
+				}
+			}
+			items[i] = nameStr
+		}
+	}
+
+	return Import{
+		module:    moduleName,
+		qualified: qualified,
+		alias:     alias,
+		items:     items,
+		hiding:    hiding,
+		Node:      pe.node(node),
+	}
+}
+
 func (pe parseEnv) parseDataCons(nodes []treesitter.Node) []DataCon {
 	dataCons := make([]DataCon, len(nodes))
 	for i, node := range nodes {
@@ -88,10 +163,26 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		dHead := pe.parseDeclHead(node)
 		constructorNodes := pe.children(node, "constructors:constructor")
 		constructors := pe.parseDataCons(constructorNodes)
-		derivingTypes := pe.parseTypes(pe.children(node, "deriving:*"))
-		deriving := make([]TyCon, len(derivingTypes))
-		for i, ty := range derivingTypes {
-			deriving[i] = *(ty.(*TyCon))
+		
+		// Parse deriving clause
+		var deriving []TyCon
+		derivingNode := pe.child(node, "deriving")
+		if derivingNode != nil {
+			classesNode := pe.child(derivingNode, "classes")
+			if classesNode != nil {
+				// Parse the type (could be a single name or a tuple)
+				ty := pe.parseType(classesNode)
+				if tycon, ok := ty.(*TyCon); ok {
+					deriving = append(deriving, *tycon)
+				} else if tytuple, ok := ty.(*TyTuple); ok {
+					// Extract TyCons from the tuple
+					for _, innerTy := range tytuple.tys {
+						if tycon, ok := innerTy.(*TyCon); ok {
+							deriving = append(deriving, *tycon)
+						}
+					}
+				}
+			}
 		}
 
 		return Decl(&DataDecl{
@@ -133,8 +224,39 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		})
 
 	case "function", "bind":
-		variableNode := node.NamedChild(0)
-		pat := pe.parsePat(variableNode)
+		// For function bindings, check if there are patterns (function arguments)
+		nameNode := pe.child(node, "name")
+		patternsNode := pe.child(node, "patterns")
+		
+		var pat Pat
+		if patternsNode != nil {
+			// Function with arguments - create PApp
+			// Get the function name
+			funcName := pe.text(nameNode)
+			funcVar := PVar{
+				name:      funcName,
+				canonical: "",
+				module:    "",
+				Node:      pe.node(nameNode),
+			}
+			
+			// Get the argument patterns
+			patNodes := pe.children(patternsNode, "*")
+			pats := make([]Pat, len(patNodes))
+			for i, patNode := range patNodes {
+				pats[i] = pe.parsePat(&patNode)
+			}
+			
+			pat = Pat(&PApp{
+				constructor: funcVar,
+				pats:        pats,
+				Node:        pe.node(node),
+			})
+		} else {
+			// Simple pattern binding (no arguments)
+			pat = pe.parsePat(nameNode)
+		}
+		
 		rhs := pe.parseRhs(node)
 		return Decl(&PatBind{
 			pat:  pat,
@@ -150,6 +272,9 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 			ty:    ty,
 			Node:  pe.node(node),
 		})
+	case "haddock", "comment":
+		// Skip comments and haddock documentation
+		return nil
 	default:
 		panic("Unknown declaration type: " + node.Kind())
 	}
@@ -269,18 +394,14 @@ func (pe parseEnv) parseLit(node *treesitter.Node) *Lit {
 func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 	rhsNodes := pe.children(node, "match")
 	wheres := pe.parseDecls(pe.children(node, "binds:decl"))
-	isPatBinding := node.ChildByFieldName("patterns") == nil
-	isUnguarded := rhsNodes[0].ChildByFieldName("guards") == nil
+	isUnguarded := len(rhsNodes) > 0 && rhsNodes[0].ChildByFieldName("guards") == nil
 	branches := make([]GuardBranch, 0)
 
 	for _, rhsNode := range rhsNodes {
 		rhs := &rhsNode
-		var rhsExp Exp
-		if isPatBinding {
-			rhsExp = pe.parseExp(pe.child(rhs, "expression"))
-		} else {
-			rhsExp = nil
-		}
+		// Parse the expression from the RHS
+		rhsExp := pe.parseExp(pe.child(rhs, "expression"))
+		
 		if isUnguarded {
 			return Rhs(&UnguardedRhs{
 				exp:    rhsExp,
@@ -288,7 +409,13 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 				Node:   pe.node(rhs),
 			})
 		} else {
-			guards := pe.parseExps(pe.children(rhs, "guards:guard"))
+			// Get the guards node, then parse the guard expressions from it
+			guardsNode := pe.child(rhs, "guards")
+			var guards []Exp
+			if guardsNode != nil {
+				guardNodes := pe.children(guardsNode, "guard")
+				guards = pe.parseExps(guardNodes)
+			}
 			branches = append(branches, GuardBranch{
 				exp:    rhsExp,
 				guards: guards,
@@ -321,13 +448,19 @@ func (pe parseEnv) parseAssertions(node *treesitter.Node) []Type {
 	}
 }
 func (pe parseEnv) parseTypes(nodes []treesitter.Node) []Type {
-	types := make([]Type, len(nodes))
-	for i, node := range nodes {
-		types[i] = pe.parseType(&node)
+	types := make([]Type, 0, len(nodes))
+	for _, node := range nodes {
+		ty := pe.parseType(&node)
+		if ty != nil {
+			types = append(types, ty)
+		}
 	}
 	return types
 }
 func (pe parseEnv) parseType(node *treesitter.Node) Type {
+	if node == nil {
+		return nil
+	}
 	switch node.Kind() {
 	case "qualified":
 		module := pe.text(pe.child(node, "module"))
@@ -355,6 +488,7 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 			module:    "",
 			Node:      pe.node(node),
 		})
+
 	case "name":
 		return Type(&TyCon{
 			name:      pe.text(node),
@@ -378,7 +512,17 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 			Node: pe.node(node),
 		})
 	case "parens":
-		return pe.parseType(pe.child(node, "type"))
+		// Parenthesized type - parse the inner type
+		typeNode := pe.child(node, "type")
+		if typeNode == nil {
+			// If no "type" field, try the first named child (for deriving clause)
+			cursor := node.Walk()
+			namedChildren := node.NamedChildren(cursor)
+			if len(namedChildren) > 0 {
+				return pe.parseType(&namedChildren[0])
+			}
+		}
+		return pe.parseType(typeNode)
 	case "function":
 		ty1 := pe.parseType(pe.child(node, "parameter"))
 		ty2 := pe.parseType(pe.child(node, "result"))
@@ -388,7 +532,14 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 			Node: pe.node(node),
 		})
 	case "tuple":
-		types := pe.parseTypes(pe.children(node, "element"))
+		// Try to get elements from "element" field first, then try direct named children
+		elementNodes := pe.children(node, "element")
+		if len(elementNodes) == 0 {
+			// If no "element" field, parse the named children directly
+			cursor := node.Walk()
+			elementNodes = node.NamedChildren(cursor)
+		}
+		types := pe.parseTypes(elementNodes)
 		return Type(&TyTuple{
 			tys:  types,
 			Node: pe.node(node),
@@ -466,6 +617,25 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 	case "parens":
 		return pe.parseExp(pe.child(node, "expression"))
 
+	case "boolean":
+		// Boolean expressions (used in guards, conditions, etc.)
+		// The actual expression is the child of the boolean node
+		return pe.parseExp(node.Child(0))
+
+	case "negation":
+		// Negation (e.g., -x, -1)
+		innerExp := pe.parseExp(pe.child(node, "expression"))
+		return Exp(&ExpApp{
+			exp1: Exp(&ExpVar{
+				name:      "negate",
+				canonical: "",
+				module:    "",
+				Node:      pe.node(node),
+			}),
+			exp2: innerExp,
+			Node: pe.node(node),
+		})
+
 	case "unit":
 		return Exp(&ExpVar{
 			name:      "unit",
@@ -486,8 +656,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 
 	case "left_section":
 		left := pe.parseExp(pe.child(node, "left_operand"))
-	  operator := pe.child(node, "operator")
-    op := pe.parseExp(operator)
+		operator := pe.child(node, "operator")
+		op := pe.parseExp(operator)
 		return Exp(&ExpLeftSection{
 			left: left,
 			op:   op,
@@ -495,7 +665,7 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		})
 	case "right_section":
 		right := pe.parseExp(pe.child(node, "right_operand"))
-    operator := node.NamedChild(0)
+		operator := node.NamedChild(0)
 		op := pe.parseExp(operator)
 		return Exp(&ExpRightSection{
 			right: right,

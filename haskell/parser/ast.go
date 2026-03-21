@@ -80,7 +80,12 @@ type TyCon struct {
 }
 
 func (*TyCon) isType()        {}
-func (t *TyCon) pretty() string { return t.name }
+func (t *TyCon) pretty() string {
+	if t.name == "top" {
+		return "()"
+	}
+	return t.name
+}
 func (n *TyCon) Loc() Loc     { return n.Node.loc }
 func (n *TyCon) Id() int      { return n.Node.id }
 
@@ -93,7 +98,9 @@ type TyApp struct {
 }
 
 func (*TyApp) isType()        {}
-func (*TyApp) pretty() string { return "" }
+func (t *TyApp) pretty() string {
+	return "(" + t.ty1.pretty() + " " + t.ty2.pretty() + ")"
+}
 func (n *TyApp) Loc() Loc     { return n.Node.loc }
 func (n *TyApp) Id() int      { return n.Node.id }
 
@@ -193,7 +200,22 @@ type PApp struct {
 }
 
 func (*PApp) isPat()         {}
-func (*PApp) pretty() string { return "" }
+func (p *PApp) pretty() string {
+	result := p.constructor.name
+	if len(p.pats) > 0 {
+		patStrs := make([]string, len(p.pats))
+		for i, pat := range p.pats {
+			patStr := pat.pretty()
+			// Wrap PApp patterns in parentheses when they appear as arguments
+			if _, isPApp := pat.(*PApp); isPApp {
+				patStr = "(" + patStr + ")"
+			}
+			patStrs[i] = patStr
+		}
+		result += " " + strings.Join(patStrs, " ")
+	}
+	return result
+}
 func (n *PApp) Loc() Loc     { return n.Node.loc }
 func (n *PApp) Id() int      { return n.Node.id }
 
@@ -265,18 +287,18 @@ func (n *ExpVar) Id() int  { return n.Node.id }
 
 // ExpCon
 // type ExpCon struct {
-// 	name      string
-// 	canonical string
-// 	module    string
-// 	Node
+//	name      string
+//	canonical string
+//	module    string
+//	Node
 // }
 
 // func (*ExpCon) isExp()         {}
 // func (c *ExpCon) pretty() string {
-// 	if c.name == "unit" {
-// 		return "()"
-// 	}
-// 	return c.name
+//	if c.name == "unit" {
+//		return "()"
+//	}
+//	return c.name
 // }
 // func (n *ExpCon) Loc() Loc {return n.Node.loc}
 
@@ -528,16 +550,7 @@ type Lit struct {
 func (*Lit) isExp() {}
 func (*Lit) isPat() {}
 func (l *Lit) pretty() string {
-	switch l.lit {
-	case "integer", "float":
-		return l.content
-	case "char":
-		return "'" + l.content + "'"
-	case "string":
-		return "\"" + l.content + "\""
-	default:
-		panic("Unknown kind of Lit: " + l.lit)
-	}
+	return l.content
 }
 func (n *Lit) Loc() Loc { return n.Node.loc }
 func (n *Lit) Id() int  { return n.Node.id }
@@ -557,11 +570,17 @@ func (ur *UnguardedRhs) pretty() string {
 	for i, where := range ur.wheres {
 		wheres[i] = where.pretty()
 	}
+
+	expStr := ""
+	if ur.exp != nil {
+		expStr = ur.exp.pretty()
+	}
+
 	return render(`{{.Exp -}} {{ if gt (len .Wheres) 0}} where {{range .Wheres}} {{ . -}}; {{end}}{{end}}`, "UnguardedRhs", struct {
 		Exp    string
 		Wheres []string
 	}{
-		Exp:    ur.exp.pretty(),
+		Exp:    expStr,
 		Wheres: wheres,
 	})
 }
@@ -576,7 +595,24 @@ type GuardedRhs struct {
 }
 
 func (*GuardedRhs) isRhs()         {}
-func (*GuardedRhs) pretty() string { return "" }
+func (gr *GuardedRhs) pretty() string {
+	branchStrs := make([]string, len(gr.branches))
+	for i, branch := range gr.branches {
+		branchStrs[i] = branch.pretty()
+	}
+
+	result := strings.Join(branchStrs, " ")
+
+	if len(gr.wheres) > 0 {
+		whereStrs := make([]string, len(gr.wheres))
+		for i, where := range gr.wheres {
+			whereStrs[i] = where.pretty()
+		}
+		result += " where {" + strings.Join(whereStrs, "; ") + "}"
+	}
+
+	return result
+}
 func (n *GuardedRhs) Loc() Loc     { return n.Node.loc }
 func (n *GuardedRhs) Id() int      { return n.Node.id }
 
@@ -587,7 +623,21 @@ type GuardBranch struct {
 	Node
 }
 
-func (*GuardBranch) pretty() string { return "" }
+func (gb *GuardBranch) pretty() string {
+	guardStrs := make([]string, 0, len(gb.guards))
+	for _, guard := range gb.guards {
+		if guard != nil {
+			guardStrs = append(guardStrs, guard.pretty())
+		}
+	}
+
+	expStr := ""
+	if gb.exp != nil {
+		expStr = gb.exp.pretty()
+	}
+
+	return "| " + strings.Join(guardStrs, ", ") + " = " + expStr
+}
 func (n *GuardBranch) Loc() Loc     { return n.Node.loc }
 func (n *GuardBranch) Id() int      { return n.Node.id }
 
@@ -668,7 +718,35 @@ type DataDecl struct {
 }
 
 func (*DataDecl) isDecl()        {}
-func (*DataDecl) pretty() string { return "" }
+func (dd *DataDecl) pretty() string {
+	// Build the header: "data Name [type vars]"
+	head := "data " + dd.dHead.name
+	if len(dd.dHead.typeVars) > 0 {
+		vars := make([]string, len(dd.dHead.typeVars))
+		for i, v := range dd.dHead.typeVars {
+			vars[i] = v.pretty()
+		}
+		head += " " + strings.Join(vars, " ")
+	}
+
+	// Build the constructors: "Con1 ... | Con2 ..."
+	conStrs := make([]string, len(dd.constructors))
+	for i, con := range dd.constructors {
+		conStrs[i] = con.pretty()
+	}
+	result := head + " = " + strings.Join(conStrs, " | ")
+
+	// Add deriving clause if present
+	if len(dd.deriving) > 0 {
+		derivingStrs := make([]string, len(dd.deriving))
+		for i, d := range dd.deriving {
+			derivingStrs[i] = d.pretty()
+		}
+		result += " deriving (" + strings.Join(derivingStrs, ", ") + ")"
+	}
+
+	return result
+}
 func (n *DataDecl) Loc() Loc     { return n.Node.loc }
 func (n *DataDecl) Id() int      { return n.Node.id }
 
@@ -764,7 +842,17 @@ type DataCon struct {
 	Node
 }
 
-func (*DataCon) pretty() string { return "" }
+func (dc *DataCon) pretty() string {
+	result := dc.name
+	if len(dc.tys) > 0 {
+		tyStrs := make([]string, len(dc.tys))
+		for i, ty := range dc.tys {
+			tyStrs[i] = ty.pretty()
+		}
+		result += " " + strings.Join(tyStrs, " ")
+	}
+	return result
+}
 func (n *DataCon) Loc() Loc     { return n.Node.loc }
 func (n *DataCon) Id() int      { return n.Node.id }
 
@@ -780,29 +868,74 @@ func (*DeclHead) pretty() string { return "" }
 func (n *DeclHead) Loc() Loc     { return n.Node.loc }
 func (n *DeclHead) Id() int      { return n.Node.id }
 
+// Import represents a single import statement
+type Import struct {
+	module    string          // Module name (e.g., "Data.List")
+	qualified bool            // true for "import qualified"
+	alias     string          // Alias name for "import ... as X" (empty if not present)
+	items     []string        // Imported items (empty if importing everything)
+	hiding    bool            // true for "import ... hiding (...)"
+	Node
+}
+
+func (i *Import) pretty() string {
+	result := "import "
+	if i.qualified {
+		result += "qualified "
+	}
+	result += i.module
+
+	if i.alias != "" {
+		result += " as " + i.alias
+	}
+
+	if len(i.items) > 0 {
+		if i.hiding {
+			result += " hiding ("
+		} else {
+			result += " ("
+		}
+		result += strings.Join(i.items, ", ")
+		result += ")"
+	}
+
+	return result
+}
+func (n *Import) Loc() Loc { return n.Node.loc }
+func (n *Import) Id() int  { return n.Node.id }
+
 // Module
 type Module struct {
 	name    string
 	decls   []Decl
-	imports []string
+	imports []Import
 	Node
 }
 
 func (m *Module) pretty() string {
 	t := `module {{ .Name }} where
+{{- range .Imports }}
+{{ . }}
+{{- end }}
 {{- range .Decls }}
 {{ . }}
 {{- end }}`
+
+	imports := make([]string, len(m.imports))
+	for i, imp := range m.imports {
+		imports[i] = imp.pretty()
+	}
 
 	decls := make([]string, len(m.decls))
 	for i, decl := range m.decls {
 		decls[i] = decl.pretty()
 	}
 	return render(t, "module", struct {
-		Name  string
-		Decls []string
+		Name    string
+		Imports []string
+		Decls   []string
 	}{
-		m.name, decls,
+		m.name, imports, decls,
 	})
 }
 func (n *Module) Loc() Loc { return n.Node.loc }
