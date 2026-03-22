@@ -431,7 +431,22 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 }
 
 func (pe parseEnv) parseAssertions(node *treesitter.Node) []Type {
+	if node == nil {
+		return []Type{}
+	}
 	switch node.Kind() {
+	case "context":
+		// Extract the actual assertion from the context node
+		contextNode := pe.child(node, "context")
+		if contextNode != nil {
+			return pe.parseAssertions(contextNode)
+		}
+		// If no context child, try parsing the whole node as a type
+		ty := pe.parseType(node)
+		if ty != nil {
+			return []Type{ty}
+		}
+		return []Type{}
 	case "parens":
 		return []Type{
 			pe.parseType(node.Child(1)),
@@ -444,7 +459,12 @@ func (pe parseEnv) parseAssertions(node *treesitter.Node) []Type {
 			pe.parseType(node),
 		}
 	default:
-		panic("Unknown kind of assertions")
+		// For single assertion type that doesn't match specific cases, try parsing as type
+		ty := pe.parseType(node)
+		if ty != nil {
+			return []Type{ty}
+		}
+		return []Type{}
 	}
 }
 func (pe parseEnv) parseTypes(nodes []treesitter.Node) []Type {

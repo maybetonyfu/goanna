@@ -405,6 +405,29 @@ func TestPAppPatterns(t *testing.T) {
 	}
 }
 
+func TestPatterns(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{"f _ = 1", "f _ = 1"}, // Wildcard pattern
+		{"f [] = 0", "f [] = 0"}, // Empty list pattern
+		{"f [x] = x", "f [x] = x"}, // Single element list
+		{"f [x, y] = x", "f [x, y] = x"}, // Multi-element list
+		{"f (x, y) = x", "f (x, y) = x"}, // Tuple pattern
+		{"f (x, y, z) = x", "f (x, y, z) = x"}, // Triple pattern
+		{"f (x:xs) = x", "f (x : xs) = x"}, // Infix cons pattern
+		{"f (x:y:zs) = x", "f (x : (y : zs)) = x"}, // Multiple cons
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
 func TestGuardedRhs(t *testing.T) {
 	type testcase struct {
 		input  string
@@ -444,6 +467,61 @@ func TestDataDecl(t *testing.T) {
 		{"data Bool = True | False", "data Bool = True | False"},
 		{"data Bool = True | False deriving (Show)", "data Bool = True | False deriving (Show)"},
 		{"data Bool = True | False deriving (Show, Eq)", "data Bool = True | False deriving (Show, Eq)"},
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
+func TestClassDecl(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{
+			`class Eq a where
+  (==) :: a -> a -> Bool`,
+			"class Eq a where (==) :: a -> (a -> (Bool))",
+		},
+		{
+			`class Show a where
+  show :: a -> String`,
+			"class Show a where show :: a -> (String)",
+		},
+		{
+			`class Ord a => Bounded a where
+  minBound :: a`,
+			"class (Ord a) => Bounded a where minBound :: a",
+		},
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
+func TestInstDecl(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{
+			`instance Eq Bool where
+  (==) = eqBool`,
+			"instance Eq Bool where (==) = eqBool",
+		},
+		{
+			`instance Show a => Show (Maybe a) where
+  show = showMaybe`,
+			"instance (Show a) => Show (Maybe a) where show = showMaybe",
+		},
 	}
 
 	for _, tc := range cases {

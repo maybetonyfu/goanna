@@ -188,7 +188,7 @@ type PWildcard struct {
 }
 
 func (*PWildcard) isPat()         {}
-func (*PWildcard) pretty() string { return "" }
+func (*PWildcard) pretty() string { return "_" }
 func (n *PWildcard) Loc() Loc     { return n.Node.loc }
 func (n *PWildcard) Id() int      { return n.Node.id }
 
@@ -226,7 +226,16 @@ type PList struct {
 }
 
 func (*PList) isPat()         {}
-func (*PList) pretty() string { return "" }
+func (pl *PList) pretty() string {
+	if len(pl.pats) == 0 {
+		return "[]"
+	}
+	patStrs := make([]string, len(pl.pats))
+	for i, pat := range pl.pats {
+		patStrs[i] = pat.pretty()
+	}
+	return "[" + strings.Join(patStrs, ", ") + "]"
+}
 func (n *PList) Loc() Loc     { return n.Node.loc }
 func (n *PList) Id() int      { return n.Node.id }
 
@@ -237,7 +246,16 @@ type PTuple struct {
 }
 
 func (*PTuple) isPat()         {}
-func (*PTuple) pretty() string { return "" }
+func (pt *PTuple) pretty() string {
+	if len(pt.pats) == 0 {
+		return "()"
+	}
+	patStrs := make([]string, len(pt.pats))
+	for i, pat := range pt.pats {
+		patStrs[i] = pat.pretty()
+	}
+	return "(" + strings.Join(patStrs, ", ") + ")"
+}
 func (n *PTuple) Loc() Loc     { return n.Node.loc }
 func (n *PTuple) Id() int      { return n.Node.id }
 
@@ -250,7 +268,12 @@ type PVar struct {
 }
 
 func (*PVar) isPat()            {}
-func (pv *PVar) pretty() string { return pv.name }
+func (pv *PVar) pretty() string {
+	if isOperator(pv.name) {
+		return "(" + pv.name + ")"
+	}
+	return pv.name
+}
 func (n *PVar) Loc() Loc        { return n.Node.loc }
 func (n *PVar) Id() int         { return n.Node.id }
 
@@ -263,7 +286,11 @@ type PInfix struct {
 }
 
 func (*PInfix) isPat()         {}
-func (*PInfix) pretty() string { return "" }
+func (pi *PInfix) pretty() string {
+	pat1Str := pi.pat1.pretty()
+	pat2Str := pi.pat2.pretty()
+	return "(" + pat1Str + " " + pi.op.name + " " + pat2Str + ")"
+}
 func (n *PInfix) Loc() Loc     { return n.Node.loc }
 func (n *PInfix) Id() int      { return n.Node.id }
 
@@ -696,15 +723,7 @@ type TypeDecl struct {
 
 func (*TypeDecl) isDecl()        {}
 func (td *TypeDecl) pretty() string {
-	head := td.dHead.name
-	if len(td.dHead.typeVars) > 0 {
-		vars := make([]string, len(td.dHead.typeVars))
-		for i, v := range td.dHead.typeVars {
-			vars[i] = v.pretty()
-		}
-		head += " " + strings.Join(vars, " ")
-	}
-	return "type " + head + " = " + td.ty.pretty()
+	return "type " + td.dHead.pretty() + " = " + td.ty.pretty()
 }
 func (n *TypeDecl) Loc() Loc     { return n.Node.loc }
 func (n *TypeDecl) Id() int      { return n.Node.id }
@@ -719,22 +738,12 @@ type DataDecl struct {
 
 func (*DataDecl) isDecl()        {}
 func (dd *DataDecl) pretty() string {
-	// Build the header: "data Name [type vars]"
-	head := "data " + dd.dHead.name
-	if len(dd.dHead.typeVars) > 0 {
-		vars := make([]string, len(dd.dHead.typeVars))
-		for i, v := range dd.dHead.typeVars {
-			vars[i] = v.pretty()
-		}
-		head += " " + strings.Join(vars, " ")
-	}
-
 	// Build the constructors: "Con1 ... | Con2 ..."
 	conStrs := make([]string, len(dd.constructors))
 	for i, con := range dd.constructors {
 		conStrs[i] = con.pretty()
 	}
-	result := head + " = " + strings.Join(conStrs, " | ")
+	result := "data " + dd.dHead.pretty() + " = " + strings.Join(conStrs, " | ")
 
 	// Add deriving clause if present
 	if len(dd.deriving) > 0 {
@@ -759,7 +768,33 @@ type ClassDecl struct {
 }
 
 func (*ClassDecl) isDecl()        {}
-func (*ClassDecl) pretty() string { return "" }
+func (cd *ClassDecl) pretty() string {
+	result := "class "
+
+	// Add context/assertions if present
+	if len(cd.assertions) > 0 {
+		assertStrs := make([]string, len(cd.assertions))
+		for i, assertion := range cd.assertions {
+			assertStrs[i] = assertion.pretty()
+		}
+		result += strings.Join(assertStrs, ", ") + " => "
+	}
+
+	// Add class head
+	result += cd.dHead.pretty()
+
+	// Add where clause with declarations
+	if len(cd.decls) > 0 {
+		result += " where "
+		declStrs := make([]string, len(cd.decls))
+		for i, decl := range cd.decls {
+			declStrs[i] = decl.pretty()
+		}
+		result += strings.Join(declStrs, "; ")
+	}
+
+	return result
+}
 func (n *ClassDecl) Loc() Loc     { return n.Node.loc }
 func (n *ClassDecl) Id() int      { return n.Node.id }
 
@@ -775,7 +810,41 @@ type InstDecl struct {
 }
 
 func (*InstDecl) isDecl()        {}
-func (*InstDecl) pretty() string { return "" }
+func (id *InstDecl) pretty() string {
+	result := "instance "
+
+	// Add context/assertions if present
+	if len(id.assertions) > 0 {
+		assertStrs := make([]string, len(id.assertions))
+		for i, assertion := range id.assertions {
+			assertStrs[i] = assertion.pretty()
+		}
+		result += strings.Join(assertStrs, ", ") + " => "
+	}
+
+	// Add instance head (class name and types)
+	result += id.name
+	if len(id.types) > 0 {
+		result += " "
+		tyStrs := make([]string, len(id.types))
+		for i, ty := range id.types {
+			tyStrs[i] = ty.pretty()
+		}
+		result += strings.Join(tyStrs, " ")
+	}
+
+	// Add where clause with body if present
+	if len(id.body) > 0 {
+		result += " where "
+		bodyStrs := make([]string, len(id.body))
+		for i, decl := range id.body {
+			bodyStrs[i] = decl.pretty()
+		}
+		result += strings.Join(bodyStrs, "; ")
+	}
+
+	return result
+}
 func (n *InstDecl) Loc() Loc     { return n.Node.loc }
 func (n *InstDecl) Id() int      { return n.Node.id }
 
@@ -803,7 +872,16 @@ type TypeSig struct {
 
 func (*TypeSig) isDecl()        {}
 func (t *TypeSig) pretty() string {
-	return strings.Join(t.names, ", ") + " :: " + t.ty.pretty()
+	// Format names, wrapping operator names in parentheses
+	formattedNames := make([]string, len(t.names))
+	for i, name := range t.names {
+		if isOperator(name) {
+			formattedNames[i] = "(" + name + ")"
+		} else {
+			formattedNames[i] = name
+		}
+	}
+	return strings.Join(formattedNames, ", ") + " :: " + t.ty.pretty()
 }
 
 func (n *TypeSig) Loc() Loc     { return n.Node.loc }
@@ -864,7 +942,17 @@ type DeclHead struct {
 	Node
 }
 
-func (*DeclHead) pretty() string { return "" }
+func (dh *DeclHead) pretty() string {
+	result := dh.name
+	if len(dh.typeVars) > 0 {
+		vars := make([]string, len(dh.typeVars))
+		for i, v := range dh.typeVars {
+			vars[i] = v.pretty()
+		}
+		result += " " + strings.Join(vars, " ")
+	}
+	return result
+}
 func (n *DeclHead) Loc() Loc     { return n.Node.loc }
 func (n *DeclHead) Id() int      { return n.Node.id }
 
@@ -949,4 +1037,16 @@ func render(temp string, name string, data any) string {
 		panic(err)
 	}
 	return buf.String()
+}
+
+// Helper function to check if a name is an operator (contains special characters)
+func isOperator(name string) bool {
+	if len(name) == 0 {
+		return false
+	}
+	// Operators start with symbols, not alphanumeric characters
+	firstChar := rune(name[0])
+	return !((firstChar >= 'a' && firstChar <= 'z') ||
+					 (firstChar >= 'A' && firstChar <= 'Z') ||
+					 firstChar == '_')
 }
