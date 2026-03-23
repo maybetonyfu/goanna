@@ -112,6 +112,24 @@ func TestTypeApp(t *testing.T) {
 	}
 }
 
+func TestTyForall(t *testing.T) {
+	type testcase struct {
+		input  string
+		expect string
+	}
+
+	cases := []testcase{
+		{"f :: Eq a => a -> a -> Bool", "f :: (Eq a) => a -> (a -> (Bool))"},
+		{"g :: Ord a => a -> a -> a", "g :: (Ord a) => a -> (a -> (a))"},
+		{"h :: Eq a => Eq b => a -> b -> Bool", "h :: (Eq a) => (Eq b) => a -> (b -> (Bool))"},
+	}
+
+	for _, tc := range cases {
+		output := parse([]byte(tc.input), "Main").pretty()
+		assert.Equal(t, withModule(tc.expect), output, "Output should equal expected")
+	}
+}
+
 func TestTypeSynonym(t *testing.T) {
 	type testcase struct {
 		input  string

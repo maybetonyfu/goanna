@@ -50,6 +50,18 @@ type Loc struct {
 	toCol    int
 }
 
+// FromLine returns the starting line number
+func (l Loc) FromLine() int { return l.fromLine }
+
+// ToLine returns the ending line number
+func (l Loc) ToLine() int { return l.toLine }
+
+// FromCol returns the starting column number
+func (l Loc) FromCol() int { return l.fromCol }
+
+// ToCol returns the ending column number
+func (l Loc) ToCol() int { return l.toCol }
+
 func mergeLoc(l1 Loc, l2 Loc) Loc {
 	return Loc{
 		fromLine: l1.fromLine,
@@ -176,7 +188,23 @@ type TyForall struct {
 }
 
 func (*TyForall) isType()        {}
-func (*TyForall) pretty() string { return "" }
+func (tf *TyForall) pretty() string {
+	result := ""
+	
+	// Add context/assertions if present (Eq a => ...)
+	if len(tf.assertions) > 0 {
+		assertStrs := make([]string, len(tf.assertions))
+		for i, assertion := range tf.assertions {
+			assertStrs[i] = assertion.pretty()
+		}
+		result += strings.Join(assertStrs, ", ") + " => "
+	}
+	
+	// Add the actual type
+	result += tf.ty.pretty()
+	
+	return result
+}
 func (n *TyForall) Loc() Loc     { return n.Node.loc }
 func (n *TyForall) Id() int      { return n.Node.id }
 
@@ -274,6 +302,9 @@ func (pv *PVar) pretty() string {
 	}
 	return pv.name
 }
+
+// Name returns the variable name
+func (pv *PVar) Name() string { return pv.name }
 func (n *PVar) Loc() Loc        { return n.Node.loc }
 func (n *PVar) Id() int         { return n.Node.id }
 
@@ -884,6 +915,9 @@ func (t *TypeSig) pretty() string {
 	return strings.Join(formattedNames, ", ") + " :: " + t.ty.pretty()
 }
 
+// Names returns the names declared in this type signature
+func (t *TypeSig) Names() []string { return t.names }
+
 func (n *TypeSig) Loc() Loc     { return n.Node.loc }
 func (n *TypeSig) Id() int      { return n.Node.id }
 
@@ -1000,6 +1034,15 @@ type Module struct {
 	Node
 }
 
+// Name returns the module name
+func (m *Module) Name() string { return m.name }
+
+// Decls returns the module declarations
+func (m *Module) Decls() []Decl { return m.decls }
+
+// Imports returns the module imports
+func (m *Module) Imports() []Import { return m.imports }
+
 func (m *Module) pretty() string {
 	t := `module {{ .Name }} where
 {{- range .Imports }}
@@ -1050,3 +1093,22 @@ func isOperator(name string) bool {
 					 (firstChar >= 'A' && firstChar <= 'Z') ||
 					 firstChar == '_')
 }
+
+// Pattern accessor methods
+func (p *PApp) Pats() []Pat { return p.pats }
+func (p *PList) Pats() []Pat { return p.pats }
+func (p *PTuple) Pats() []Pat { return p.pats }
+func (p *PInfix) Pat1() Pat { return p.pat1 }
+func (p *PInfix) Pat2() Pat { return p.pat2 }
+
+// Accessor methods for declarations and expressions
+func (pb *PatBind) Pat() Pat { return pb.pat }
+func (dc *DataCon) Name() string { return dc.name }
+func (dd *DataDecl) DeclHead() DeclHead { return dd.dHead }
+func (cd *ClassDecl) DeclHead() DeclHead { return cd.dHead }
+func (ec *ExpComprehension) Generators() []Generator { return ec.generators }
+func (ed *ExpDo) Stmts() []Statement { return ed.stmts }
+func (el *ExpLambda) Pats() []Pat { return el.pats }
+func (a *Alt) Pat() Pat { return a.pat }
+func (g *Generator) Pat() Pat { return g.pat }
+func (dh *DeclHead) Name() string { return dh.name }

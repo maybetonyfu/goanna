@@ -137,6 +137,11 @@ func (pe parseEnv) assoc(sym string) string {
 	return pe.associativity[sym]
 }
 
+// Parse parses Haskell code and returns the AST as a Module
+func Parse(code []byte, altname string) *Module {
+	return parse(code, altname)
+}
+
 func parse(code []byte, altname string) *Module {
 	parser := treesitter.NewParser()
 	defer parser.Close()
