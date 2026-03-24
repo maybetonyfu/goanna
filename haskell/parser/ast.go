@@ -1112,3 +1112,4 @@ func (el *ExpLambda) Pats() []Pat { return el.pats }
 func (a *Alt) Pat() Pat { return a.pat }
 func (g *Generator) Pat() Pat { return g.pat }
 func (dh *DeclHead) Name() string { return dh.name }
+func (pb *PatBind) Rhs() Rhs { return pb.rhs }
