@@ -13,12 +13,12 @@ type EffectiveRange struct {
 
 // Identifier represents a named entity in Haskell code with its scope information
 type Identifier struct {
-	name            string
-	module          string
-	effectiveRange  EffectiveRange
-	internalName    string
-	isParameter     bool
-	declaredAt      []parser.Loc
+	name           string
+	module         string
+	effectiveRange EffectiveRange
+	internalName   string
+	isParameter    bool
+	declaredAt     []parser.Loc
 }
 
 // TermIdentifier represents a value-level identifier (functions, variables)
@@ -45,8 +45,8 @@ type RenameResult struct {
 
 // RenameEnv holds the environment for identifier renaming and analysis
 type RenameEnv struct {
-	counter         int
-	internedNames   map[string]map[string]string // module -> (symbol -> internalName)
+	counter       int
+	internedNames map[string]map[string]string // module -> (symbol -> internalName)
 }
 
 // GenUniqName generates a unique internal name by combining "V" with the current counter value,
@@ -83,27 +83,40 @@ func (env *RenameEnv) Intern(symbolName string, moduleName string) string {
 }
 
 // namesFromPat extracts all names and their node IDs from a pattern
-func namesFromPat(pat parser.Pat) []struct{ name string; id int } {
-	var names []struct{ name string; id int }
+func namesFromPat(pat parser.Pat) []struct {
+	name string
+	id   int
+} {
+	var names []struct {
+		name string
+		id   int
+	}
 
 	switch p := pat.(type) {
 	case *parser.PVar:
-		names = append(names, struct{ name string; id int }{p.Name(), p.Id()})
+		names = append(names, struct {
+			name string
+			id   int
+		}{p.Name, p.Id()})
 	case *parser.PApp:
-		for _, subpat := range p.Pats() {
+		names = append(names, struct {
+			name string
+			id   int
+		}{p.Constructor.Name, p.Constructor.Id()})
+		for _, subpat := range p.Pats {
 			names = append(names, namesFromPat(subpat)...)
 		}
 	case *parser.PList:
-		for _, subpat := range p.Pats() {
+		for _, subpat := range p.Pats {
 			names = append(names, namesFromPat(subpat)...)
 		}
 	case *parser.PTuple:
-		for _, subpat := range p.Pats() {
+		for _, subpat := range p.Pats {
 			names = append(names, namesFromPat(subpat)...)
 		}
 	case *parser.PInfix:
-		names = append(names, namesFromPat(p.Pat1())...)
-		names = append(names, namesFromPat(p.Pat2())...)
+		names = append(names, namesFromPat(p.Pat1)...)
+		names = append(names, namesFromPat(p.Pat2)...)
 	}
 
 	return names
@@ -117,7 +130,7 @@ func (env *RenameEnv) Rename(ast parser.Module) RenameResult {
 		Classes: []ClassIdentifier{},
 	}
 
-	moduleName := ast.Name()
+	moduleName := ast.Name
 
 	// Use visitor pattern to traverse the AST
 	visitor := parser.NewTraverser(
@@ -155,7 +168,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			}
 		}
 
-		for _, name := range node.Names() {
+		for _, name := range node.Names {
 			internalName := env.Intern(name, moduleName)
 			termId := TermIdentifier{
 				Identifier: Identifier{
@@ -172,8 +185,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 
 	case *parser.PatBind:
 		// Process pattern bindings - extract names from patterns
-		names := namesFromPat(node.Pat())
-
+		names := namesFromPat(node.Pat)
 		for i, nameInfo := range names {
 			var effectiveRange EffectiveRange
 			var isParam bool
@@ -197,7 +209,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			} else {
 				// Other names get RHS scope and are parameters
 				effectiveRange = EffectiveRange{
-					ranges: []parser.Loc{node.Rhs().Loc()},
+					ranges: []parser.Loc{node.Rhs.Loc()},
 					global: false,
 				}
 				isParam = true
@@ -219,64 +231,64 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 
 	case *parser.DataCon:
 		// Data constructors are always global terms
-		internalName := env.Intern(node.Name(), moduleName)
+		internalName := env.Intern(node.Name, moduleName)
 		termId := TermIdentifier{
 			Identifier: Identifier{
-				name:   node.Name(),
+				name:   node.Name,
 				module: moduleName,
 				effectiveRange: EffectiveRange{
 					ranges: []parser.Loc{node.Loc()},
 					global: true,
 				},
 				internalName: internalName,
-				isParameter:    false,
-				declaredAt:     []parser.Loc{node.Loc()},
+				isParameter:  false,
+				declaredAt:   []parser.Loc{node.Loc()},
 			},
 		}
 		result.Terms = append(result.Terms, termId)
 
 	case *parser.DataDecl:
 		// Data type declarations - extract type name from DeclHead
-		dHead := node.DeclHead()
-		internalName := env.Intern(dHead.Name(), moduleName)
+		dHead := node.DHead
+		internalName := env.Intern(dHead.Name, moduleName)
 		typeId := TypeIdentifier{
 			Identifier: Identifier{
-				name:   dHead.Name(),
+				name:   dHead.Name,
 				module: moduleName,
 				effectiveRange: EffectiveRange{
 					ranges: []parser.Loc{dHead.Loc()},
 					global: true,
 				},
 				internalName: internalName,
-				isParameter:    false,
-				declaredAt:     []parser.Loc{dHead.Loc()},
+				isParameter:  false,
+				declaredAt:   []parser.Loc{dHead.Loc()},
 			},
 		}
 		result.Types = append(result.Types, typeId)
 
 	case *parser.ClassDecl:
 		// Class declarations - extract class name from DeclHead
-		dHead := node.DeclHead()
-		internalName := env.Intern(dHead.Name(), moduleName)
+		dHead := node.DHead
+		internalName := env.Intern(dHead.Name, moduleName)
 		classId := ClassIdentifier{
 			Identifier: Identifier{
-				name:   dHead.Name(),
+				name:   dHead.Name,
 				module: moduleName,
 				effectiveRange: EffectiveRange{
 					ranges: []parser.Loc{dHead.Loc()},
 					global: true,
 				},
 				internalName: internalName,
-				isParameter:    false,
-				declaredAt:     []parser.Loc{dHead.Loc()},
+				isParameter:  false,
+				declaredAt:   []parser.Loc{dHead.Loc()},
 			},
 		}
 		result.Classes = append(result.Classes, classId)
 
 	case *parser.ExpComprehension:
 		// List comprehension - extract names from generators
-		for _, gen := range node.Generators() {
-			names := namesFromPat(gen.Pat())
+		for _, gen := range node.Generators {
+			names := namesFromPat(gen.Pat)
 			effectiveRange := EffectiveRange{
 				ranges: []parser.Loc{node.Loc()},
 				global: false,
@@ -305,9 +317,9 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			global: false,
 		}
 
-		for _, stmt := range node.Stmts() {
+		for _, stmt := range node.Stmts {
 			if gen, ok := stmt.(*parser.Generator); ok {
-				names := namesFromPat(gen.Pat())
+				names := namesFromPat(gen.Pat)
 				for _, nameInfo := range names {
 					internalName := env.Intern(nameInfo.name, moduleName)
 					termId := TermIdentifier{
@@ -316,8 +328,8 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 							module:         moduleName,
 							effectiveRange: effectiveRange,
 							internalName:   internalName,
-						isParameter:    false,
-						declaredAt:     []parser.Loc{node.Loc()},
+							isParameter:    false,
+							declaredAt:     []parser.Loc{node.Loc()},
 						},
 					}
 					result.Terms = append(result.Terms, termId)
@@ -328,11 +340,11 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.ExpLambda:
 		// Lambda expression - extract names from patterns
 		effectiveRange := EffectiveRange{
-			ranges: []parser.Loc{node.Loc()},
+			ranges: []parser.Loc{node.Exp.Loc()},
 			global: false,
 		}
 
-		for _, pat := range node.Pats() {
+		for _, pat := range node.Pats {
 			names := namesFromPat(pat)
 			for _, nameInfo := range names {
 				internalName := env.Intern(nameInfo.name, moduleName)
@@ -342,8 +354,8 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 						module:         moduleName,
 						effectiveRange: effectiveRange,
 						internalName:   internalName,
-					isParameter:    false,
-					declaredAt:     []parser.Loc{node.Loc()},
+						isParameter:    true,
+						declaredAt:     []parser.Loc{node.Loc()},
 					},
 				}
 				result.Terms = append(result.Terms, termId)
@@ -352,7 +364,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 
 	case *parser.Alt:
 		// Case alternative - extract names from pattern
-		names := namesFromPat(node.Pat())
+		names := namesFromPat(node.Pat)
 		effectiveRange := EffectiveRange{
 			ranges: []parser.Loc{node.Loc()},
 			global: false,
@@ -366,8 +378,8 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 					module:         moduleName,
 					effectiveRange: effectiveRange,
 					internalName:   internalName,
-				isParameter:    false,
-				declaredAt:     []parser.Loc{node.Loc()},
+					isParameter:    true,
+					declaredAt:     []parser.Loc{node.Loc()},
 				},
 			}
 			result.Terms = append(result.Terms, termId)

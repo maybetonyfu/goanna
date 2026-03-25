@@ -1,8 +1,9 @@
 package parser
 
 import (
-	treesitter "github.com/tree-sitter/go-tree-sitter"
 	"slices"
+
+	treesitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 func (pe parseEnv) parseDeclHead(node *treesitter.Node) DeclHead {
@@ -13,9 +14,9 @@ func (pe parseEnv) parseDeclHead(node *treesitter.Node) DeclHead {
 		typeVars[i] = *t.(*TyVar)
 	}
 	return DeclHead{
-		name:      name,
-		canonical: "",
-		typeVars:  typeVars,
+		Name:      name,
+		Canonical: "",
+		TypeVars:  typeVars,
 		Node:      pe.node(node),
 	}
 }
@@ -86,11 +87,11 @@ func (pe parseEnv) parseImport(node *treesitter.Node) Import {
 	}
 
 	return Import{
-		module:    moduleName,
-		qualified: qualified,
-		alias:     alias,
-		items:     items,
-		hiding:    hiding,
+		Module:    moduleName,
+		Qualified: qualified,
+		Alias:     alias,
+		Items:     items,
+		Hiding:    hiding,
 		Node:      pe.node(node),
 	}
 }
@@ -104,12 +105,12 @@ func (pe parseEnv) parseDataCons(nodes []treesitter.Node) []DataCon {
 }
 
 func (pe parseEnv) parseDataCon(node *treesitter.Node) DataCon {
-	name := pe.text(pe.child(node, "constructor:name"))
-	types := pe.parseTypes(pe.children(node, "constructor:field"))
+	name := pe.text(pe.child(node, "Constructor:name"))
+	types := pe.parseTypes(pe.children(node, "Constructor:field"))
 	return DataCon{
-		name:      name,
-		canonical: "",
-		tys:       types,
+		Name:      name,
+		Canonical: "",
+		Tys:       types,
 		Node:      pe.node(node),
 	}
 }
@@ -154,16 +155,16 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 
 		ty := pe.parseType(pe.child(node, "type"))
 		return Decl(&TypeSig{
-			names:      names,
-			ty:         ty,
-			canonicals: []string{},
+			Names:      names,
+			Ty:         ty,
+			Canonicals: []string{},
 			Node:       pe.node(node),
 		})
 	case "data_type":
 		dHead := pe.parseDeclHead(node)
 		constructorNodes := pe.children(node, "constructors:constructor")
 		constructors := pe.parseDataCons(constructorNodes)
-		
+
 		// Parse deriving clause
 		var deriving []TyCon
 		derivingNode := pe.child(node, "deriving")
@@ -176,7 +177,7 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 					deriving = append(deriving, *tycon)
 				} else if tytuple, ok := ty.(*TyTuple); ok {
 					// Extract TyCons from the tuple
-					for _, innerTy := range tytuple.tys {
+					for _, innerTy := range tytuple.Tys {
 						if tycon, ok := innerTy.(*TyCon); ok {
 							deriving = append(deriving, *tycon)
 						}
@@ -186,9 +187,9 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		}
 
 		return Decl(&DataDecl{
-			dHead:        dHead,
-			constructors: constructors,
-			deriving:     deriving,
+			DHead:        dHead,
+			Constructors: constructors,
+			Deriving:     deriving,
 			Node:         pe.node(node),
 		})
 	case "class":
@@ -196,9 +197,9 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		dHead := pe.parseDeclHead(node)
 		decls := pe.parseDecls(pe.children(node, "declarations:*"))
 		return Decl(&ClassDecl{
-			assertions: assertions,
-			dHead:      dHead,
-			decls:      decls,
+			Assertions: assertions,
+			DHead:      dHead,
+			Decls:      decls,
 			Node:       pe.node(node),
 		})
 
@@ -206,8 +207,8 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		assertions := pe.parseAssertions(pe.child(node, "context"))
 		var module, name string
 		if pe.child(node, "name").Kind() == "qualified" {
-			module = pe.text(pe.child(node, "name:module"))
-			name = pe.text(pe.child(node, "name:id"))
+			module = pe.text(pe.child(node, "Name:module"))
+			name = pe.text(pe.child(node, "Name:id"))
 		} else {
 			module = ""
 			name = pe.text(pe.child(node, "name"))
@@ -215,11 +216,11 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		tys := pe.parseTypes(pe.children(node, "patterns:*"))
 		decls := pe.parseDecls(pe.children(node, "declarations:*"))
 		return Decl(&InstDecl{
-			assertions: assertions,
-			name:       name,
-			module:     module,
-			types:      tys,
-			body:       decls,
+			Assertions: assertions,
+			Name:       name,
+			Module:     module,
+			Types:      tys,
+			Body:       decls,
 			Node:       pe.node(node),
 		})
 
@@ -227,40 +228,40 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		// For function bindings, check if there are patterns (function arguments)
 		nameNode := pe.child(node, "name")
 		patternsNode := pe.child(node, "patterns")
-		
+
 		var pat Pat
 		if patternsNode != nil {
 			// Function with arguments - create PApp
 			// Get the function name
 			funcName := pe.text(nameNode)
 			funcVar := PVar{
-				name:      funcName,
-				canonical: "",
-				module:    "",
+				Name:      funcName,
+				Canonical: "",
+				Module:    "",
 				Node:      pe.node(nameNode),
 			}
-			
+
 			// Get the argument patterns
 			patNodes := pe.children(patternsNode, "*")
 			pats := make([]Pat, len(patNodes))
 			for i, patNode := range patNodes {
 				pats[i] = pe.parsePat(&patNode)
 			}
-			
+
 			pat = Pat(&PApp{
-				constructor: funcVar,
-				pats:        pats,
+				Constructor: funcVar,
+				Pats:        pats,
 				Node:        pe.node(node),
 			})
 		} else {
 			// Simple pattern binding (no arguments)
 			pat = pe.parsePat(nameNode)
 		}
-		
+
 		rhs := pe.parseRhs(node)
 		return Decl(&PatBind{
-			pat:  pat,
-			rhs:  rhs,
+			Pat:  pat,
+			Rhs:  rhs,
 			Node: pe.node(node),
 		})
 	case "fixity":
@@ -268,8 +269,8 @@ func (pe parseEnv) parseDecl(node *treesitter.Node) Decl {
 		dHead := pe.parseDeclHead(node)
 		ty := pe.parseType(pe.child(node, "type"))
 		return Decl(&TypeDecl{
-			dHead: dHead,
-			ty:    ty,
+			DHead: dHead,
+			Ty:    ty,
 			Node:  pe.node(node),
 		})
 	case "haddock", "comment":
@@ -295,9 +296,9 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 		module := pe.text(pe.child(node, "module"))
 		name := pe.text(pe.child(node, "id"))
 		return Pat(&PVar{
-			name:      name,
-			module:    module,
-			canonical: "",
+			Name:      name,
+			Module:    module,
+			Canonical: "",
 			Node:      pe.node(node),
 		})
 
@@ -305,18 +306,18 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 		operator := node.NamedChild(0)
 		name := pe.text(operator)
 		return Pat(&PVar{
-			name:      name,
-			canonical: "",
-			module:    "",
+			Name:      name,
+			Canonical: "",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
 	case "variable", "constructor_operator", "constructor":
 		name := pe.text(node)
 		return Pat(&PVar{
-			name:      name,
-			canonical: "",
-			module:    "",
+			Name:      name,
+			Canonical: "",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
@@ -334,14 +335,14 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 	case "tuple":
 		pats := pe.parsePats(pe.children(node, "element"))
 		return Pat(&PTuple{
-			pats: pats,
+			Pats: pats,
 			Node: pe.node(node),
 		})
 
 	case "list":
 		pats := pe.parsePats(pe.children(node, "element"))
 		return Pat(&PList{
-			pats: pats,
+			Pats: pats,
 			Node: pe.node(node),
 		})
 
@@ -361,8 +362,8 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 		}
 
 		return Pat(&PApp{
-			constructor: constructor,
-			pats:        pats,
+			Constructor: constructor,
+			Pats:        pats,
 			Node:        pe.node(node),
 		})
 
@@ -371,9 +372,9 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 		pat1 := pe.parsePat(pe.child(node, "left_operand"))
 		pat2 := pe.parsePat(pe.child(node, "right_operand"))
 		return Pat(&PInfix{
-			op:   op,
-			pat1: pat1,
-			pat2: pat2,
+			Op:   op,
+			Pat1: pat1,
+			Pat2: pat2,
 			Node: pe.node(node),
 		})
 
@@ -385,8 +386,8 @@ func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 
 func (pe parseEnv) parseLit(node *treesitter.Node) *Lit {
 	return &Lit{
-		lit:     node.Child(0).Kind(),
-		content: pe.text(node),
+		Lit:     node.Child(0).Kind(),
+		Content: pe.text(node),
 		Node:    pe.node(node),
 	}
 }
@@ -401,11 +402,11 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 		rhs := &rhsNode
 		// Parse the expression from the RHS
 		rhsExp := pe.parseExp(pe.child(rhs, "expression"))
-		
+
 		if isUnguarded {
 			return Rhs(&UnguardedRhs{
-				exp:    rhsExp,
-				wheres: wheres,
+				Exp:    rhsExp,
+				Wheres: wheres,
 				Node:   pe.node(rhs),
 			})
 		} else {
@@ -417,15 +418,15 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 				guards = pe.parseExps(guardNodes)
 			}
 			branches = append(branches, GuardBranch{
-				exp:    rhsExp,
-				guards: guards,
+				Exp:    rhsExp,
+				Guards: guards,
 				Node:   pe.node(rhs),
 			})
 		}
 	}
 	return Rhs(&GuardedRhs{
-		wheres:   wheres,
-		branches: branches,
+		Wheres:   wheres,
+		Branches: branches,
 		Node:     pe.node(node),
 	})
 }
@@ -486,9 +487,9 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 		module := pe.text(pe.child(node, "module"))
 		name := pe.text(pe.child(node, "id"))
 		return Type(&TyCon{
-			name:      name,
-			canonical: "top",
-			module:    module,
+			Name:      name,
+			Canonical: "top",
+			Module:    module,
 			Node:      pe.node(node),
 		})
 
@@ -496,39 +497,39 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 		assertions := pe.parseAssertions(pe.child(node, "context"))
 		ty := pe.parseType(pe.child(node, "type"))
 		return Type(&TyForall{
-			assertions: assertions,
-			ty:         ty,
+			Assertions: assertions,
+			Ty:         ty,
 			Node:       pe.node(node),
 		})
 
 	case "unit":
 		return Type(&TyCon{
-			name:      "top",
-			canonical: "top",
-			module:    "",
+			Name:      "top",
+			Canonical: "top",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
 	case "name":
 		return Type(&TyCon{
-			name:      pe.text(node),
-			canonical: "",
-			module:    "",
+			Name:      pe.text(node),
+			Canonical: "",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
 	case "variable":
 		return Type(&TyVar{
-			name:      pe.text(node),
-			canonical: "",
+			Name:      pe.text(node),
+			Canonical: "",
 			Node:      pe.node(node),
 		})
 	case "apply":
 		ty1 := pe.parseType(pe.child(node, "constructor"))
 		ty2 := pe.parseType(pe.child(node, "argument"))
 		return Type(&TyApp{
-			ty1:  ty1,
-			ty2:  ty2,
+			Ty1:  ty1,
+			Ty2:  ty2,
 			Node: pe.node(node),
 		})
 	case "parens":
@@ -547,8 +548,8 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 		ty1 := pe.parseType(pe.child(node, "parameter"))
 		ty2 := pe.parseType(pe.child(node, "result"))
 		return Type(&TyFunction{
-			ty1:  ty1,
-			ty2:  ty2,
+			Ty1:  ty1,
+			Ty2:  ty2,
 			Node: pe.node(node),
 		})
 	case "tuple":
@@ -561,28 +562,28 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 		}
 		types := pe.parseTypes(elementNodes)
 		return Type(&TyTuple{
-			tys:  types,
+			Tys:  types,
 			Node: pe.node(node),
 		})
 	case "list":
 		ty := pe.parseType(pe.child(node, "element"))
 		return Type(&TyList{
-			ty:   ty,
+			Ty:   ty,
 			Node: pe.node(node),
 		})
 	case "prefix_list":
 		return Type(&TyCon{
-			name:      "list",
-			canonical: "list",
-			module:    "",
+			Name:      "list",
+			Canonical: "list",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
 	case "prefix_tuple":
 		return Type(&TyCon{
-			name:      "tuple",
-			canonical: " tuple",
-			module:    "",
+			Name:      "tuple",
+			Canonical: " tuple",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
@@ -590,13 +591,13 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 		opName := pe.text(&pe.children(node, "*")[0])
 		if opName == "->" {
 			return Type(&TyCon{
-				name:      "function",
-				canonical: "function",
-				module:    "",
+				Name:      "function",
+				Canonical: "function",
+				Module:    "",
 				Node:      pe.node(node),
 			})
 		} else {
-			panic("Unknonw op name: " + opName)
+			panic("Unknonw op Name: " + opName)
 		}
 	default:
 		panic("Unknown type node: " + node.Kind())
@@ -617,9 +618,9 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		module := pe.text(pe.child(node, "module"))
 		id := pe.child(node, "id")
 		return Exp(&ExpVar{
-			name:      pe.text(id),
-			module:    module,
-			canonical: "",
+			Name:      pe.text(id),
+			Module:    module,
+			Canonical: "",
 			Node:      pe.node(node),
 		})
 
@@ -628,9 +629,9 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 
 	case "variable", "constructor", "operator", "constructor_operator":
 		return Exp(&ExpVar{
-			name:      pe.text(node),
-			module:    "",
-			canonical: "",
+			Name:      pe.text(node),
+			Module:    "",
+			Canonical: "",
 			Node:      pe.node(node),
 		})
 
@@ -646,21 +647,21 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		// Negation (e.g., -x, -1)
 		innerExp := pe.parseExp(pe.child(node, "expression"))
 		return Exp(&ExpApp{
-			exp1: Exp(&ExpVar{
-				name:      "negate",
-				canonical: "",
-				module:    "",
+			Exp1: Exp(&ExpVar{
+				Name:      "negate",
+				Canonical: "",
+				Module:    "",
 				Node:      pe.node(node),
 			}),
-			exp2: innerExp,
+			Exp2: innerExp,
 			Node: pe.node(node),
 		})
 
 	case "unit":
 		return Exp(&ExpVar{
-			name:      "unit",
-			canonical: "",
-			module:    "",
+			Name:      "unit",
+			Canonical: "",
+			Module:    "",
 			Node:      pe.node(node),
 		})
 
@@ -669,8 +670,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 
 	case "apply":
 		return Exp(&ExpApp{
-			exp1: pe.parseExp(node.Child(0)),
-			exp2: pe.parseExp(node.Child(1)),
+			Exp1: pe.parseExp(node.Child(0)),
+			Exp2: pe.parseExp(node.Child(1)),
 			Node: pe.node(node),
 		})
 
@@ -679,8 +680,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		operator := pe.child(node, "operator")
 		op := pe.parseExp(operator)
 		return Exp(&ExpLeftSection{
-			left: left,
-			op:   op,
+			Left: left,
+			Op:   op,
 			Node: pe.node(node),
 		})
 	case "right_section":
@@ -688,16 +689,16 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		operator := node.NamedChild(0)
 		op := pe.parseExp(operator)
 		return Exp(&ExpRightSection{
-			right: right,
-			op:    op,
+			Right: right,
+			Op:    op,
 			Node:  pe.node(node),
 		})
 	case "lambda":
 		pats := pe.parsePats(pe.children(node, "patterns:*"))
 		exp := pe.parseExp(pe.child(node, "expression"))
 		return Exp(&ExpLambda{
-			pats: pats,
-			exp:  exp,
+			Pats: pats,
+			Exp:  exp,
 			Node: pe.node(node),
 		})
 	case "let_in":
@@ -708,8 +709,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		}
 		exp := pe.parseExp(pe.child(node, "expression"))
 		return Exp(&ExpLet{
-			exp:   exp,
-			binds: binds,
+			Exp:   exp,
+			Binds: binds,
 			Node:  pe.node(node),
 		})
 
@@ -718,9 +719,9 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		thenExp := pe.parseExp(pe.child(node, "then"))
 		elseExp := pe.parseExp(pe.child(node, "else"))
 		return Exp(&ExpIf{
-			cond:    condExp,
-			ifTrue:  thenExp,
-			ifFalse: elseExp,
+			Cond:    condExp,
+			IfTrue:  thenExp,
+			IfFalse: elseExp,
 			Node:    pe.node(node),
 		})
 
@@ -732,8 +733,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			alts[i] = pe.parseAlt(&alt)
 		}
 		return Exp(&ExpCase{
-			exp:  exp,
-			alts: alts,
+			Exp:  exp,
+			Alts: alts,
 			Node: pe.node(node),
 		})
 
@@ -744,14 +745,14 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			exps[i] = pe.parseExp(&elem)
 		}
 		return Exp(&ExpTuple{
-			exps: exps,
+			Exps: exps,
 			Node: pe.node(node),
 		})
 
 	case "list":
 		exps := pe.parseExps(pe.children(node, "element"))
 		return Exp(&ExpList{
-			exps: exps,
+			Exps: exps,
 			Node: pe.node(node),
 		})
 
@@ -761,15 +762,15 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 		if end == nil {
 			exp := pe.parseExp(start)
 			return Exp(&ExpEnumFrom{
-				exp:  exp,
+				Exp:  exp,
 				Node: pe.node(node),
 			})
 		} else {
 			exp1 := pe.parseExp(start)
 			exp2 := pe.parseExp(end)
 			return Exp(&ExpEnumFromTo{
-				exp1: exp1,
-				exp2: exp2,
+				Exp1: exp1,
+				Exp2: exp2,
 				Node: pe.node(node),
 			})
 		}
@@ -780,15 +781,15 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			switch statementNode.Kind() {
 			case "exp":
 				stmts[i] = Statement(&Qualifier{
-					exp:  pe.parseExp(statementNode.NamedChild(0)),
+					Exp:  pe.parseExp(statementNode.NamedChild(0)),
 					Node: pe.node(&statementNode),
 				})
 			case "bind":
 				pat := pe.parsePat(pe.child(&statementNode, "pattern"))
 				exp := pe.parseExp(pe.child(&statementNode, "expression"))
 				stmts[i] = Statement(&Generator{
-					pat:  pat,
-					exp:  exp,
+					Pat:  pat,
+					Exp:  exp,
 					Node: pe.node(&statementNode),
 				})
 			case "let":
@@ -798,13 +799,13 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 					binds[i] = pe.parseDecl(&declNode)
 				}
 				stmts[i] = Statement(&LetStmt{
-					binds: binds,
+					Binds: binds,
 					Node:  pe.node(&statementNode),
 				})
 			}
 		}
 		return Exp(&ExpDo{
-			stmts: stmts,
+			Stmts: stmts,
 			Node:  pe.node(node),
 		})
 	case "list_comprehension":
@@ -817,8 +818,8 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 				pat := pe.parsePat(pe.child(&qualifierNode, "pattern"))
 				exp := pe.parseExp(pe.child(&qualifierNode, "expression"))
 				generators = append(generators, Generator{
-					pat:  pat,
-					exp:  exp,
+					Pat:  pat,
+					Exp:  exp,
 					Node: pe.node(&qualifierNode),
 				})
 			case "boolean":
@@ -826,9 +827,9 @@ func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 			}
 		}
 		return Exp(&ExpComprehension{
-			exp:        exp,
-			generators: generators,
-			guards:     guards,
+			Exp:        exp,
+			Generators: generators,
+			Guards:     guards,
 			Node:       pe.node(node),
 		})
 
@@ -872,13 +873,13 @@ func (pe parseEnv) buildInfix(exps []Exp, ops []ExpVar) ([]Exp, []ExpVar) {
 		}
 
 		prev := ops[i-1]
-		if op.name == prev.name && highestIndex == i-1 && pe.assoc(op.name) == "r" {
+		if op.Name == prev.Name && highestIndex == i-1 && pe.assoc(op.Name) == "r" {
 			// two same operators, use the first unless it's right associative
 			highestIndex = i
 			continue
 		}
 
-		if pe.fix(op.name) > pe.fix(ops[i-1].name) {
+		if pe.fix(op.Name) > pe.fix(ops[i-1].Name) {
 			highestIndex = i
 			continue
 		}
@@ -889,9 +890,9 @@ func (pe parseEnv) buildInfix(exps []Exp, ops []ExpVar) ([]Exp, []ExpVar) {
 	op := ops[highestIndex]
 
 	exp := Exp(&ExpInfix{
-		exp1: left,
-		exp2: right,
-		op:   op,
+		Exp1: left,
+		Exp2: right,
+		Op:   op,
 		Node: Node{
 			id:  pe.id(),
 			loc: mergeLoc(left.Loc(), right.Loc()),
@@ -916,9 +917,9 @@ func (pe parseEnv) parseAlt(node *treesitter.Node) Alt {
 	exp := pe.parseExp(pe.child(node, "match:expression"))
 	binds := pe.parseDecls(pe.children(node, "binds:decl"))
 	return Alt{
-		pat:   pat,
-		exp:   exp,
-		binds: binds,
+		Pat:   pat,
+		Exp:   exp,
+		Binds: binds,
 		Node:  pe.node(node),
 	}
 }

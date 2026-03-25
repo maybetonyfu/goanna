@@ -24,6 +24,14 @@ func sexpCommand(ctx context.Context, cmd *cli.Command) error {
 	return parser.PrintSexp(filePath)
 }
 
+func printASTCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("missing file argument")
+	}
+	filePath := cmd.Args().Get(0)
+	return parser.PrintASTFromFile(filePath)
+}
+
 func main() {
 	cmd := &cli.Command{
 		Name:  "goanna",
@@ -40,6 +48,12 @@ func main() {
 				Usage:     "Print the tree-sitter S-expression for debugging",
 				ArgsUsage: "<file.hs>",
 				Action:    sexpCommand,
+			},
+			{
+				Name:      "print-ast",
+				Usage:     "Print the AST in indented tree format with type, ID, and location",
+				ArgsUsage: "<file.hs>",
+				Action:    printASTCommand,
 			},
 		},
 	}

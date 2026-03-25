@@ -6,34 +6,42 @@ import (
 )
 
 // Helper functions for testing
-func hasGlobalTermIdents(t *testing.T, result RenameResult, module string, names []string) {
+func hasGlobalTermIdents(t *testing.T, code string, names []string) {
 	t.Helper()
+	env := &RenameEnv{}
+	codeByte := []byte(code)
+	moduleAST := parser.Parse(codeByte, "Test")
+	result := env.Rename(*moduleAST)
 	for _, name := range names {
 		found := false
 		for _, term := range result.Terms {
-			if term.name == name && term.module == module && term.effectiveRange.global {
+			if term.name == name && term.module == "Test" && term.effectiveRange.global {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Expected global term identifier '%s' in module '%s', not found", name, module)
+			t.Errorf("Expected global term identifier '%s' in module 'Test', not found", name)
 		}
 	}
 }
 
-func hasLocalTermIdents(t *testing.T, result RenameResult, module string, names []string) {
+func hasLocalTermIdents(t *testing.T, code string, names []string) {
 	t.Helper()
+	env := &RenameEnv{}
+	codeByte := []byte(code)
+	moduleAST := parser.Parse(codeByte, "Test")
+	result := env.Rename(*moduleAST)
 	for _, name := range names {
 		found := false
 		for _, term := range result.Terms {
-			if term.name == name && term.module == module && !term.effectiveRange.global {
+			if term.name == name && term.module == "Test" && !term.effectiveRange.global {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("Expected local term identifier '%s' in module '%s', not found", name, module)
+			t.Errorf("Expected local term identifier '%s' in module 'Test', not found", name)
 		}
 	}
 }
@@ -125,30 +133,119 @@ func TestIntern(t *testing.T) {
 	}
 }
 
-func TestRenameTypeSig(t *testing.T) {
-	env := &RenameEnv{}
+func TestRenameVisitNodes(t *testing.T) {
+	// TypeSig tests
+	t.Run("TypeSig_Single", func(t *testing.T) {
+		hasGlobalTermIdents(t, "f :: Int -> Int", []string{"f"})
+	})
 
-	// Create a simple module with a type signature
-	code := []byte("module Test where\nf :: Int -> Int")
-	module := parser.Parse(code, "Test")
-	result := env.Rename(*module)
+	t.Run("TypeSig_Multiple", func(t *testing.T) {
+		hasGlobalTermIdents(t, "f, g, h :: Int -> Int", []string{"f", "g", "h"})
+	})
 
-	// Check we have the expected identifiers
-	hasGlobalTermIdents(t, result, "Test", []string{"f"})
-	hasTypeIdents(t, result, "Test", []string{})
-	hasClassIdents(t, result, "Test", []string{})
-}
+	t.Run("TypeSig_WithConstraints", func(t *testing.T) {
+		hasGlobalTermIdents(t, "sort :: Ord a => [a] -> [a]", []string{"sort"})
+	})
 
-func TestRenameMultipleNames(t *testing.T) {
-	env := &RenameEnv{}
+	// PatBind tests
+	t.Run("PatBind_Simple", func(t *testing.T) {
+		hasGlobalTermIdents(t, "f = a", []string{"f"})
+	})
 
-	// Create a module with multiple names in a single type signature
-	code := []byte("module Test where\nf, g, h :: Int -> Int")
-	module := parser.Parse(code, "Test")
-	result := env.Rename(*module)
+	t.Run("PatBind_WithParameter", func(t *testing.T) {
+		hasGlobalTermIdents(t, "f a = a", []string{"f"})
+		hasLocalTermIdents(t, "f a = a", []string{"a"})
+	})
 
-	// Check we have the expected global term identifiers
-	hasGlobalTermIdents(t, result, "Test", []string{"f", "g", "h"})
-	hasTypeIdents(t, result, "Test", []string{})
-	hasClassIdents(t, result, "Test", []string{})
+	t.Run("PatBind_MultipleParameters", func(t *testing.T) {
+		hasGlobalTermIdents(t, "add x y = x + y", []string{"add"})
+		hasLocalTermIdents(t, "add x y = x + y", []string{"x", "y"})
+	})
+
+	t.Run("PatBind_TuplePattern", func(t *testing.T) {
+		hasGlobalTermIdents(t, "swap (x, y) = (y, x)", []string{"swap"})
+		hasLocalTermIdents(t, "swap (x, y) = (y, x)", []string{"x", "y"})
+	})
+
+	t.Run("PatBind_ListPattern", func(t *testing.T) {
+		hasGlobalTermIdents(t, "head (x:xs) = x", []string{"head"})
+		hasLocalTermIdents(t, "head (x:xs) = x", []string{"x", "xs"})
+	})
+
+	// ExpLambda tests
+	t.Run("ExpLambda_SingleParam", func(t *testing.T) {
+		code := "f = \\x -> x + 1"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x"})
+	})
+
+	t.Run("ExpLambda_MultipleParams", func(t *testing.T) {
+		code := "f = \\x y -> x + y"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x", "y"})
+	})
+
+	t.Run("ExpLambda_PatternParam", func(t *testing.T) {
+		code := "f = \\(x, y) -> x + y"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x", "y"})
+	})
+
+	// ExpComprehension tests
+	t.Run("ExpComprehension_SingleGenerator", func(t *testing.T) {
+		code := "f = [x | x <- [1, 2, 3]]"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x"})
+	})
+
+	t.Run("ExpComprehension_MultipleGenerators", func(t *testing.T) {
+		code := "f = [(x, y) | x <- [1, 2], y <- [3, 4]]"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x", "y"})
+	})
+
+	t.Run("ExpComprehension_WithPattern", func(t *testing.T) {
+		code := "f = [a + b | (a, b) <- [(1, 2), (3, 4)]]"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"a", "b"})
+	})
+
+	// ExpDo tests
+	t.Run("ExpDo_SingleGenerator", func(t *testing.T) {
+		code := "f = do\n  x <- getLine\n  return x"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x"})
+	})
+
+	t.Run("ExpDo_MultipleGenerators", func(t *testing.T) {
+		code := "f = do\n  x <- getLine\n  y <- getLine\n  return (x, y)"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x", "y"})
+	})
+
+	// Alt tests (case expressions)
+	t.Run("Alt_SimplePattern", func(t *testing.T) {
+		code := "f x = case x of\n  y -> y + 1"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"x", "y"})
+	})
+
+	t.Run("Alt_TuplePattern", func(t *testing.T) {
+		code := "f p = case p of\n  (a, b) -> a + b"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"p", "a", "b"})
+	})
+
+	t.Run("Alt_ListPattern", func(t *testing.T) {
+		code := "f xs = case xs of\n  (y:ys) -> y"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"xs", "y", "ys"})
+	})
+
+	t.Run("Alt_MultipleAlternatives", func(t *testing.T) {
+		code := "f xs = case xs of\n  [] -> 0\n  (x:xs) -> x"
+		hasGlobalTermIdents(t, code, []string{"f"})
+		hasLocalTermIdents(t, code, []string{"xs", "x"})
+	})
+
 }

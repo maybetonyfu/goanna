@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 	treesitterhaskell "github.com/tree-sitter/tree-sitter-haskell/bindings/go"
 )
@@ -70,15 +71,15 @@ func (pe parseEnv) loc(node *treesitter.Node) Loc {
 	nodeRange := node.Range()
 	return Loc{
 		fromLine: int(nodeRange.StartPoint.Row),
-		fromCol: int(nodeRange.StartPoint.Column),
-		toLine: int(nodeRange.EndPoint.Row),
-		toCol: int(nodeRange.EndPoint.Column),
+		fromCol:  int(nodeRange.StartPoint.Column),
+		toLine:   int(nodeRange.EndPoint.Row),
+		toCol:    int(nodeRange.EndPoint.Column),
 	}
 }
 
 func (pe parseEnv) node(node *treesitter.Node) Node {
 	n := Node{
-		id: pe.id(),
+		id:  pe.id(),
 		loc: pe.loc(node),
 	}
 	return n
@@ -152,10 +153,10 @@ func parse(code []byte, altname string) *Module {
 	cursor := root.Walk()
 	initialCounter := 0
 	pe := parseEnv{
-		counter: &initialCounter,
-		source:  code,
-		cursor:  cursor,
-		fixity: fixity,
+		counter:       &initialCounter,
+		source:        code,
+		cursor:        cursor,
+		fixity:        fixity,
 		associativity: associativity,
 	}
 	children := root.Children(cursor)
@@ -189,9 +190,9 @@ func parse(code []byte, altname string) *Module {
 	}
 
 	return &Module{
-		name:    moduleName,
-		decls:   decls,
-		imports: imports,
+		Name:    moduleName,
+		Decls:   decls,
+		Imports: imports,
 		Node:    pe.node(root),
 	}
 }
@@ -221,7 +222,7 @@ func ParseFile(filePath string) error {
 		return fmt.Errorf("error parsing file")
 	}
 
-	fmt.Println(module.pretty())
+	fmt.Println(module.Pretty())
 	return nil
 }
 
