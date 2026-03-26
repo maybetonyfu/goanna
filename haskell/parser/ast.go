@@ -43,37 +43,6 @@ type Rhs interface {
 	isRhs()
 }
 
-type Loc struct {
-	fromLine int
-	toLine   int
-	fromCol  int
-	toCol    int
-}
-
-// FromLine returns the starting line number
-func (l Loc) FromLine() int { return l.fromLine }
-
-// ToLine returns the ending line number
-func (l Loc) ToLine() int { return l.toLine }
-
-// FromCol returns the starting column number
-func (l Loc) FromCol() int { return l.fromCol }
-
-// ToCol returns the ending column number
-func (l Loc) ToCol() int { return l.toCol }
-
-func mergeLoc(l1 Loc, l2 Loc) Loc {
-	return Loc{
-		fromLine: l1.fromLine,
-		toLine:   l1.toLine,
-		fromCol:  l2.fromCol,
-		toCol:    l2.toCol,
-	}
-}
-
-var noloc = Loc{
-	0, 0, 0, 0,
-}
 
 type Node struct {
 	id  int

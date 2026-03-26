@@ -11,6 +11,34 @@ type EffectiveRange struct {
 	global bool
 }
 
+// Equal checks if two EffectiveRanges are equal
+// All global ranges are considered equal to each other
+func (er EffectiveRange) Equal(other EffectiveRange) bool {
+	// If both are global, they are equal
+	if er.global && other.global {
+		return true
+	}
+
+	// If one is global and the other is not, they are not equal
+	if er.global != other.global {
+		return false
+	}
+
+	// Both are local - compare the ranges
+	if len(er.ranges) != len(other.ranges) {
+		return false
+	}
+
+	// Check if all ranges are equal
+	for i := range er.ranges {
+		if !er.ranges[i].Equal(other.ranges[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Identifier represents a named entity in Haskell code with its scope information
 type Identifier struct {
 	name           string
@@ -142,6 +170,9 @@ func (env *RenameEnv) Rename(ast parser.Module) RenameResult {
 	)
 	visitor.Visit(&ast, nil)
 
+	// Merge duplicate TermIdentifiers
+	result.Terms = mergeTermIdentifiers(result.Terms)
+
 	return *result
 }
 
@@ -155,7 +186,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 		// Check if parent is a module (global scope)
 		if _, isModule := parent.(*parser.Module); isModule || parent == nil {
 			effectiveRange = EffectiveRange{
-				ranges: []parser.Loc{node.Loc()},
+				ranges: []parser.Loc{},
 				global: true,
 			}
 		} else {
@@ -191,21 +222,40 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			var isParam bool
 
 			if i == 0 {
-				// First name gets parent scope or global scope
-				if _, isModule := parent.(*parser.Module); isModule || parent == nil {
+				// First name determines scope based on context
+				// Check if this is a local declaration (where clause or let expression)
+				isLocalDecl := false
+				if parent != nil {
+					switch parent.(type) {
+					case *parser.UnguardedRhs, *parser.GuardedRhs, *parser.Alt, *parser.ExpLet:
+						isLocalDecl = true
+					}
+				}
+
+				if isLocalDecl {
+					// Local declarations (where clauses and let expressions) are local to the parent scope
 					effectiveRange = EffectiveRange{
-						ranges: []parser.Loc{node.Loc()},
+						ranges: []parser.Loc{parent.Loc()},
+						global: false,
+					}
+					isParam = false
+				} else if _, isModule := parent.(*parser.Module); isModule || parent == nil {
+					// Module-level declarations are global
+					effectiveRange = EffectiveRange{
+						ranges: []parser.Loc{},
 						global: true,
 					}
+					isParam = false
 				} else {
+					// Other contexts are local
 					if parent != nil {
 						effectiveRange = EffectiveRange{
 							ranges: []parser.Loc{parent.Loc()},
 							global: false,
 						}
 					}
+					isParam = false
 				}
-				isParam = false
 			} else {
 				// Other names get RHS scope and are parameters
 				effectiveRange = EffectiveRange{
@@ -237,7 +287,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				name:   node.Name,
 				module: moduleName,
 				effectiveRange: EffectiveRange{
-					ranges: []parser.Loc{node.Loc()},
+					ranges: []parser.Loc{},
 					global: true,
 				},
 				internalName: internalName,
@@ -256,7 +306,26 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				name:   dHead.Name,
 				module: moduleName,
 				effectiveRange: EffectiveRange{
-					ranges: []parser.Loc{dHead.Loc()},
+					ranges: []parser.Loc{},
+					global: true,
+				},
+				internalName: internalName,
+				isParameter:  false,
+				declaredAt:   []parser.Loc{dHead.Loc()},
+			},
+		}
+		result.Types = append(result.Types, typeId)
+
+	case *parser.TypeDecl:
+		// Type declarations - extract type name from DeclHead
+		dHead := node.DHead
+		internalName := env.Intern(dHead.Name, moduleName)
+		typeId := TypeIdentifier{
+			Identifier: Identifier{
+				name:   dHead.Name,
+				module: moduleName,
+				effectiveRange: EffectiveRange{
+					ranges: []parser.Loc{},
 					global: true,
 				},
 				internalName: internalName,
@@ -275,7 +344,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				name:   dHead.Name,
 				module: moduleName,
 				effectiveRange: EffectiveRange{
-					ranges: []parser.Loc{dHead.Loc()},
+					ranges: []parser.Loc{},
 					global: true,
 				},
 				internalName: internalName,
@@ -387,6 +456,58 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	}
 }
 
+// mergeTermIdentifiers merges TermIdentifiers with the same module, name, and effectiveRange
+// by concatenating their declaredAt fields
+func mergeTermIdentifiers(terms []TermIdentifier) []TermIdentifier {
+	if len(terms) == 0 {
+		return terms
+	}
+
+	// Map key: module + name + effectiveRange representation
+	// We'll use a custom key structure
+	type key struct {
+		module string
+		name   string
+		// We can't use EffectiveRange directly as a map key, so we'll search linearly
+	}
+
+	merged := make(map[int]*TermIdentifier) // index -> merged identifier
+	keyToIndex := make(map[key][]int)       // key -> list of potential match indices
+
+	for _, term := range terms {
+		k := key{module: term.module, name: term.name}
+
+		// Look for existing term with same module, name, and effectiveRange
+		found := false
+		if indices, exists := keyToIndex[k]; exists {
+			for _, idx := range indices {
+				if merged[idx].effectiveRange.Equal(term.effectiveRange) {
+					// Found a match - merge declaredAt
+					merged[idx].declaredAt = append(merged[idx].declaredAt, term.declaredAt...)
+					found = true
+					break
+				}
+			}
+		}
+
+		if !found {
+			// Create new entry
+			idx := len(merged)
+			termCopy := term
+			merged[idx] = &termCopy
+			keyToIndex[k] = append(keyToIndex[k], idx)
+		}
+	}
+
+	// Convert map back to slice
+	result := make([]TermIdentifier, 0, len(merged))
+	for i := 0; i < len(merged); i++ {
+		result = append(result, *merged[i])
+	}
+
+	return result
+}
+
 // RenameAll analyzes multiple modules and returns all identifiers of all three kinds from all modules
 func (env *RenameEnv) RenameAll(modules []parser.Module) RenameResult {
 	allResult := RenameResult{
@@ -402,5 +523,25 @@ func (env *RenameEnv) RenameAll(modules []parser.Module) RenameResult {
 		allResult.Classes = append(allResult.Classes, result.Classes...)
 	}
 
+	// Merge duplicate TermIdentifiers
+	allResult.Terms = mergeTermIdentifiers(allResult.Terms)
+
 	return allResult
+}
+
+// Resolve takes a module and rename result and returns a resolved module
+// Currently returns the module unchanged
+func Resolve(module parser.Module, result RenameResult) parser.Module {
+	// TODO: Implement resolution logic
+	return module
+}
+
+// ResolveAll takes a list of modules and rename result and returns resolved modules
+// Currently returns the modules unchanged
+func ResolveAll(modules []parser.Module, result RenameResult) []parser.Module {
+	resolved := make([]parser.Module, len(modules))
+	for i, module := range modules {
+		resolved[i] = Resolve(module, result)
+	}
+	return resolved
 }
