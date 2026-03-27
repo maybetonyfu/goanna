@@ -1,4 +1,4 @@
-package haskell
+package rename
 
 import (
 	"goanna/haskell/parser"
@@ -11,7 +11,7 @@ func hasGlobalTermIdents(t *testing.T, code string, names []string) []TermIdenti
 	env := &RenameEnv{}
 	codeByte := []byte(code)
 	moduleAST := parser.Parse(codeByte, "Test")
-	result := env.Rename(*moduleAST)
+	result := env.GenIdentifiers(*moduleAST)
 	
 	var matched []TermIdentifier
 	for _, name := range names {
@@ -35,7 +35,7 @@ func hasLocalTermIdents(t *testing.T, code string, names []string) []TermIdentif
 	env := &RenameEnv{}
 	codeByte := []byte(code)
 	moduleAST := parser.Parse(codeByte, "Test")
-	result := env.Rename(*moduleAST)
+	result := env.GenIdentifiers(*moduleAST)
 	
 	var matched []TermIdentifier
 	for _, name := range names {
@@ -331,7 +331,7 @@ func TestRenameVisitNodes(t *testing.T) {
 		code := "type String = [Char]"
 		env := &RenameEnv{}
 		moduleAST := parser.Parse([]byte(code), "Test")
-		result := env.Rename(*moduleAST)
+		result := env.GenIdentifiers(*moduleAST)
 
 		// Check type identifier
 		typeIdents := hasTypeIdents(t, result, "Test", []string{"String"})
@@ -347,7 +347,7 @@ func TestRenameVisitNodes(t *testing.T) {
 		code := "type Pair a b = (a, b)"
 		env := &RenameEnv{}
 		moduleAST := parser.Parse([]byte(code), "Test")
-		result := env.Rename(*moduleAST)
+		result := env.GenIdentifiers(*moduleAST)
 
 		// Check type identifier
 		typeIdents := hasTypeIdents(t, result, "Test", []string{"Pair"})
@@ -364,7 +364,7 @@ func TestRenameVisitNodes(t *testing.T) {
 		code := "class Eq a where\n  eq :: a -> a -> Bool"
 		env := &RenameEnv{}
 		moduleAST := parser.Parse([]byte(code), "Test")
-		result := env.Rename(*moduleAST)
+		result := env.GenIdentifiers(*moduleAST)
 
 		// Check class identifier
 		classIdents := hasClassIdents(t, result, "Test", []string{"Eq"})
@@ -380,7 +380,7 @@ func TestRenameVisitNodes(t *testing.T) {
 		code := "class Eq a => Ord a where\n  compare :: a -> a -> Ordering"
 		env := &RenameEnv{}
 		moduleAST := parser.Parse([]byte(code), "Test")
-		result := env.Rename(*moduleAST)
+		result := env.GenIdentifiers(*moduleAST)
 
 		// Check class identifier
 		classIdents := hasClassIdents(t, result, "Test", []string{"Ord"})
@@ -396,7 +396,7 @@ func TestRenameVisitNodes(t *testing.T) {
 		code := "class Monad m where\n  bind :: m a -> (a -> m b) -> m b\n  return :: a -> m a"
 		env := &RenameEnv{}
 		moduleAST := parser.Parse([]byte(code), "Test")
-		result := env.Rename(*moduleAST)
+		result := env.GenIdentifiers(*moduleAST)
 
 		// Check class identifier
 		classIdents := hasClassIdents(t, result, "Test", []string{"Monad"})
@@ -406,7 +406,6 @@ func TestRenameVisitNodes(t *testing.T) {
 		if len(classIdents) > 0 && !classIdents[0].effectiveRange.global {
 			t.Errorf("Expected 'Monad' to be global")
 		}
-		
 		// Note: Method type signatures within class declarations are currently
 		// treated as local to the class, not global identifiers
 	})

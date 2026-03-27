@@ -58,7 +58,11 @@ func getNodeName(ast AST) string {
 	case *PVar:
 		return node.Name
 	case *ExpVar:
-		return node.Name
+		if node.Module != "" {
+			return fmt.Sprintf("%s%s", node.Module, node.Name)
+		} else {
+			return node.Name
+		}
 	case *InstDecl:
 		return node.Name
 	case *DataCon:

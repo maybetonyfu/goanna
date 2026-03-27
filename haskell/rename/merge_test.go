@@ -1,4 +1,4 @@
-package haskell
+package rename
 
 import (
 	"goanna/haskell/parser"

@@ -1,4 +1,4 @@
-package haskell
+package rename
 
 import (
 	"fmt"
@@ -150,8 +150,8 @@ func namesFromPat(pat parser.Pat) []struct {
 	return names
 }
 
-// Rename analyzes an AST and returns identifiers of all three kinds with their scope information
-func (env *RenameEnv) Rename(ast parser.Module) RenameResult {
+// GenIdentifiers analyzes an AST and returns identifiers of all three kinds with their scope information
+func (env *RenameEnv) GenIdentifiers(ast parser.Module) RenameResult {
 	result := &RenameResult{
 		Terms:   []TermIdentifier{},
 		Types:   []TypeIdentifier{},
@@ -508,8 +508,8 @@ func mergeTermIdentifiers(terms []TermIdentifier) []TermIdentifier {
 	return result
 }
 
-// RenameAll analyzes multiple modules and returns all identifiers of all three kinds from all modules
-func (env *RenameEnv) RenameAll(modules []parser.Module) RenameResult {
+// GenIdentifiersAll analyzes multiple modules and returns all identifiers of all three kinds from all modules
+func (env *RenameEnv) GenIdentifiersAll(modules []parser.Module) RenameResult {
 	allResult := RenameResult{
 		Terms:   []TermIdentifier{},
 		Types:   []TypeIdentifier{},
@@ -517,7 +517,7 @@ func (env *RenameEnv) RenameAll(modules []parser.Module) RenameResult {
 	}
 
 	for _, module := range modules {
-		result := env.Rename(module)
+		result := env.GenIdentifiers(module)
 		allResult.Terms = append(allResult.Terms, result.Terms...)
 		allResult.Types = append(allResult.Types, result.Types...)
 		allResult.Classes = append(allResult.Classes, result.Classes...)
@@ -527,21 +527,4 @@ func (env *RenameEnv) RenameAll(modules []parser.Module) RenameResult {
 	allResult.Terms = mergeTermIdentifiers(allResult.Terms)
 
 	return allResult
-}
-
-// Resolve takes a module and rename result and returns a resolved module
-// Currently returns the module unchanged
-func Resolve(module parser.Module, result RenameResult) parser.Module {
-	// TODO: Implement resolution logic
-	return module
-}
-
-// ResolveAll takes a list of modules and rename result and returns resolved modules
-// Currently returns the modules unchanged
-func ResolveAll(modules []parser.Module, result RenameResult) []parser.Module {
-	resolved := make([]parser.Module, len(modules))
-	for i, module := range modules {
-		resolved[i] = Resolve(module, result)
-	}
-	return resolved
 }
