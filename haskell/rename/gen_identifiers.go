@@ -46,7 +46,7 @@ type Identifier struct {
 	effectiveRange EffectiveRange
 	internalName   string
 	isParameter    bool
-	declaredAt     []parser.Loc
+	declaredAt     []int
 }
 
 // TermIdentifier represents a value-level identifier (functions, variables)
@@ -54,14 +54,26 @@ type TermIdentifier struct {
 	Identifier
 }
 
+func (t TermIdentifier) getIdentifier() Identifier { return t.Identifier }
+
 // TypeIdentifier represents a type-level identifier (type constructors, type variables)
 type TypeIdentifier struct {
 	Identifier
 }
 
+func (t TypeIdentifier) getIdentifier() Identifier { return t.Identifier }
+
 // ClassIdentifier represents a type class identifier
 type ClassIdentifier struct {
 	Identifier
+}
+
+func (c ClassIdentifier) getIdentifier() Identifier { return c.Identifier }
+
+// HasIdentifier is a type constraint for types that embed Identifier
+type HasIdentifier interface {
+	TermIdentifier | TypeIdentifier | ClassIdentifier
+	getIdentifier() Identifier
 }
 
 // RenameResult holds the results of identifier extraction from a module
@@ -71,10 +83,17 @@ type RenameResult struct {
 	Classes []ClassIdentifier
 }
 
+// internEntry holds a symbol+effectiveRange pair mapped to an internal name
+type internEntry struct {
+	symbol string
+	er     EffectiveRange
+	name   string
+}
+
 // RenameEnv holds the environment for identifier renaming and analysis
 type RenameEnv struct {
 	counter       int
-	internedNames map[string]map[string]string // module -> (symbol -> internalName)
+	internedNames map[string][]internEntry // module -> list of interned entries
 }
 
 // GenUniqName generates a unique internal name by combining "V" with the current counter value,
@@ -85,28 +104,29 @@ func (env *RenameEnv) GenUniqName() string {
 	return name
 }
 
-// Intern returns the internal name for a symbol in a given module.
-// If the symbol has already been interned, it returns the existing internal name.
-// Otherwise, it generates a new unique name, stores it, and returns it.
-func (env *RenameEnv) Intern(symbolName string, moduleName string) string {
+// Intern returns the internal name for a symbol in a given module and effectiveRange.
+// Two names are interned to the same symbol only if they share the same module and effectiveRange.
+// If already interned, returns the existing internal name; otherwise generates a new unique name.
+func (env *RenameEnv) Intern(symbolName string, moduleName string, er EffectiveRange) string {
 	// Initialize the map if needed
 	if env.internedNames == nil {
-		env.internedNames = make(map[string]map[string]string)
+		env.internedNames = make(map[string][]internEntry)
 	}
 
-	// Initialize the module map if needed
-	if env.internedNames[moduleName] == nil {
-		env.internedNames[moduleName] = make(map[string]string)
+	// Search for an existing entry with matching symbol and effectiveRange
+	for _, entry := range env.internedNames[moduleName] {
+		if entry.symbol == symbolName && entry.er.Equal(er) {
+			return entry.name
+		}
 	}
 
-	// Check if already interned
-	if internalName, exists := env.internedNames[moduleName][symbolName]; exists {
-		return internalName
-	}
-
-	// Generate new unique name
+	// Generate new unique name and store it
 	internalName := env.GenUniqName()
-	env.internedNames[moduleName][symbolName] = internalName
+	env.internedNames[moduleName] = append(env.internedNames[moduleName], internEntry{
+		symbol: symbolName,
+		er:     er,
+		name:   internalName,
+	})
 	return internalName
 }
 
@@ -191,16 +211,15 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			}
 		} else {
 			// Parent is not a module - local scope
-			if parent != nil {
-				effectiveRange = EffectiveRange{
-					ranges: []parser.Loc{parent.Loc()},
-					global: false,
-				}
+			effectiveRange = EffectiveRange{
+				ranges: []parser.Loc{parent.Loc()},
+				global: false,
 			}
+
 		}
 
 		for _, name := range node.Names {
-			internalName := env.Intern(name, moduleName)
+			internalName := env.Intern(name, moduleName, effectiveRange)
 			termId := TermIdentifier{
 				Identifier: Identifier{
 					name:           name,
@@ -208,7 +227,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 					effectiveRange: effectiveRange,
 					internalName:   internalName,
 					isParameter:    false,
-					declaredAt:     []parser.Loc{node.Loc()},
+					declaredAt:     []int{node.Id()},
 				},
 			}
 			result.Terms = append(result.Terms, termId)
@@ -248,11 +267,9 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 					isParam = false
 				} else {
 					// Other contexts are local
-					if parent != nil {
-						effectiveRange = EffectiveRange{
-							ranges: []parser.Loc{parent.Loc()},
-							global: false,
-						}
+					effectiveRange = EffectiveRange{
+						ranges: []parser.Loc{parent.Loc()},
+						global: false,
 					}
 					isParam = false
 				}
@@ -265,7 +282,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				isParam = true
 			}
 
-			internalName := env.Intern(nameInfo.name, moduleName)
+			internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
 			termId := TermIdentifier{
 				Identifier: Identifier{
 					name:           nameInfo.name,
@@ -273,7 +290,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 					effectiveRange: effectiveRange,
 					internalName:   internalName,
 					isParameter:    isParam,
-					declaredAt:     []parser.Loc{node.Loc()},
+					declaredAt:     []int{nameInfo.id},
 				},
 			}
 			result.Terms = append(result.Terms, termId)
@@ -281,7 +298,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 
 	case *parser.DataCon:
 		// Data constructors are always global terms
-		internalName := env.Intern(node.Name, moduleName)
+		internalName := env.Intern(node.Name, moduleName, EffectiveRange{global: true})
 		termId := TermIdentifier{
 			Identifier: Identifier{
 				name:   node.Name,
@@ -292,7 +309,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				},
 				internalName: internalName,
 				isParameter:  false,
-				declaredAt:   []parser.Loc{node.Loc()},
+				declaredAt:   []int{node.Id()},
 			},
 		}
 		result.Terms = append(result.Terms, termId)
@@ -300,7 +317,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.DataDecl:
 		// Data type declarations - extract type name from DeclHead
 		dHead := node.DHead
-		internalName := env.Intern(dHead.Name, moduleName)
+		internalName := env.Intern(dHead.Name, moduleName, EffectiveRange{global: true})
 		typeId := TypeIdentifier{
 			Identifier: Identifier{
 				name:   dHead.Name,
@@ -311,7 +328,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				},
 				internalName: internalName,
 				isParameter:  false,
-				declaredAt:   []parser.Loc{dHead.Loc()},
+				declaredAt:   []int{dHead.Id()},
 			},
 		}
 		result.Types = append(result.Types, typeId)
@@ -319,7 +336,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.TypeDecl:
 		// Type declarations - extract type name from DeclHead
 		dHead := node.DHead
-		internalName := env.Intern(dHead.Name, moduleName)
+		internalName := env.Intern(dHead.Name, moduleName, EffectiveRange{global: true})
 		typeId := TypeIdentifier{
 			Identifier: Identifier{
 				name:   dHead.Name,
@@ -330,7 +347,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				},
 				internalName: internalName,
 				isParameter:  false,
-				declaredAt:   []parser.Loc{dHead.Loc()},
+				declaredAt:   []int{dHead.Id()},
 			},
 		}
 		result.Types = append(result.Types, typeId)
@@ -338,7 +355,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.ClassDecl:
 		// Class declarations - extract class name from DeclHead
 		dHead := node.DHead
-		internalName := env.Intern(dHead.Name, moduleName)
+		internalName := env.Intern(dHead.Name, moduleName, EffectiveRange{global: true})
 		classId := ClassIdentifier{
 			Identifier: Identifier{
 				name:   dHead.Name,
@@ -349,7 +366,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				},
 				internalName: internalName,
 				isParameter:  false,
-				declaredAt:   []parser.Loc{dHead.Loc()},
+				declaredAt:   []int{dHead.Id()},
 			},
 		}
 		result.Classes = append(result.Classes, classId)
@@ -364,7 +381,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			}
 
 			for _, nameInfo := range names {
-				internalName := env.Intern(nameInfo.name, moduleName)
+				internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
 				termId := TermIdentifier{
 					Identifier: Identifier{
 						name:           nameInfo.name,
@@ -372,7 +389,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 						effectiveRange: effectiveRange,
 						internalName:   internalName,
 						isParameter:    false,
-						declaredAt:     []parser.Loc{node.Loc()},
+						declaredAt:     []int{nameInfo.id},
 					},
 				}
 				result.Terms = append(result.Terms, termId)
@@ -390,7 +407,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			if gen, ok := stmt.(*parser.Generator); ok {
 				names := namesFromPat(gen.Pat)
 				for _, nameInfo := range names {
-					internalName := env.Intern(nameInfo.name, moduleName)
+					internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
 					termId := TermIdentifier{
 						Identifier: Identifier{
 							name:           nameInfo.name,
@@ -398,7 +415,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 							effectiveRange: effectiveRange,
 							internalName:   internalName,
 							isParameter:    false,
-							declaredAt:     []parser.Loc{node.Loc()},
+							declaredAt:     []int{nameInfo.id},
 						},
 					}
 					result.Terms = append(result.Terms, termId)
@@ -416,7 +433,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 		for _, pat := range node.Pats {
 			names := namesFromPat(pat)
 			for _, nameInfo := range names {
-				internalName := env.Intern(nameInfo.name, moduleName)
+				internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
 				termId := TermIdentifier{
 					Identifier: Identifier{
 						name:           nameInfo.name,
@@ -424,7 +441,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 						effectiveRange: effectiveRange,
 						internalName:   internalName,
 						isParameter:    true,
-						declaredAt:     []parser.Loc{node.Loc()},
+						declaredAt:     []int{nameInfo.id},
 					},
 				}
 				result.Terms = append(result.Terms, termId)
@@ -440,7 +457,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 		}
 
 		for _, nameInfo := range names {
-			internalName := env.Intern(nameInfo.name, moduleName)
+			internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
 			termId := TermIdentifier{
 				Identifier: Identifier{
 					name:           nameInfo.name,
@@ -448,7 +465,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 					effectiveRange: effectiveRange,
 					internalName:   internalName,
 					isParameter:    true,
-					declaredAt:     []parser.Loc{node.Loc()},
+					declaredAt:     []int{nameInfo.id},
 				},
 			}
 			result.Terms = append(result.Terms, termId)
@@ -456,8 +473,91 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	}
 }
 
-// mergeTermIdentifiers merges TermIdentifiers with the same module, name, and effectiveRange
-// by concatenating their declaredAt fields
+// RenameDecl traverses all nodes in module and sets Canonical on any node
+// whose ID appears in the declaredAt list of an identifier in result.
+func RenameDecl(module *parser.Module, result RenameResult) {
+	// Build a map from node ID to internalName
+	declaredAtMap := make(map[int]string)
+
+	for _, term := range result.Terms {
+		id := term.getIdentifier()
+		for _, nodeID := range id.declaredAt {
+			declaredAtMap[nodeID] = id.internalName
+		}
+	}
+	for _, ty := range result.Types {
+		id := ty.getIdentifier()
+		for _, nodeID := range id.declaredAt {
+			declaredAtMap[nodeID] = id.internalName
+		}
+	}
+	for _, cls := range result.Classes {
+		id := cls.getIdentifier()
+		for _, nodeID := range id.declaredAt {
+			declaredAtMap[nodeID] = id.internalName
+		}
+	}
+
+	// Traverse the module and set Canonical on matching nodes
+	traverser := parser.NewTraverser(
+		func(_ int, ast parser.AST, _ parser.AST) int {
+			if internalName, ok := declaredAtMap[ast.Id()]; ok {
+				if named, ok := ast.(parser.Name); ok {
+					named.SetCanonical(internalName)
+				}
+			}
+			return 0
+		},
+		0,
+	)
+	traverser.Visit(module, nil)
+}
+
+// RenameTypeDecl traverses all nodes in module and for every TypeSig sets
+// Canonicals to the internal names of the TermIdentifiers whose declaredAt
+// includes the TypeSig's node ID, ordered to match TypeSig.Names.
+func RenameTypeDecl(module *parser.Module, result RenameResult) {
+	// Build a map from TypeSig node ID -> (name -> internalName)
+	// A TermIdentifier's declaredAt may include a TypeSig node ID.
+	type nameMap = map[string]string
+	typeSigMap := make(map[int]nameMap)
+
+	for _, term := range result.Terms {
+		id := term.getIdentifier()
+		for _, nodeID := range id.declaredAt {
+			if typeSigMap[nodeID] == nil {
+				typeSigMap[nodeID] = make(nameMap)
+			}
+			typeSigMap[nodeID][id.name] = id.internalName
+		}
+	}
+
+	traverser := parser.NewTraverser(
+		func(_ int, ast parser.AST, _ parser.AST) int {
+			typeSig, ok := ast.(*parser.TypeSig)
+			if !ok {
+				return 0
+			}
+			names, ok := typeSigMap[typeSig.Id()]
+			if !ok {
+				return 0
+			}
+			canonicals := make([]string, len(typeSig.Names))
+			for i, name := range typeSig.Names {
+				if internalName, found := names[name]; found {
+					canonicals[i] = internalName
+				} else {
+					canonicals[i] = name
+				}
+			}
+			typeSig.Canonicals = canonicals
+			return 0
+		},
+		0,
+	)
+	traverser.Visit(module, nil)
+}
+
 func mergeTermIdentifiers(terms []TermIdentifier) []TermIdentifier {
 	if len(terms) == 0 {
 		return terms

@@ -105,7 +105,24 @@ func (pe parseEnv) parseDataCons(nodes []treesitter.Node) []DataCon {
 }
 
 func (pe parseEnv) parseDataCon(node *treesitter.Node) DataCon {
-	name := pe.text(pe.child(node, "Constructor:name"))
+	// Try to find the constructor name from the first child or named children
+	var name string
+	nameNode := pe.child(node, "Constructor:name")
+	if nameNode == nil {
+		// If Constructor:name doesn't exist, try getting the first named child
+		for i := uint(0); i < uint(node.NamedChildCount()); i++ {
+			child := node.NamedChild(i)
+			if child.Kind() != "type" && child.Kind() != "Type" {
+				nameNode = child
+				break
+			}
+		}
+	}
+
+	if nameNode != nil {
+		name = pe.text(nameNode)
+	}
+
 	types := pe.parseTypes(pe.children(node, "Constructor:field"))
 	return DataCon{
 		Name:      name,
@@ -504,8 +521,8 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 
 	case "unit":
 		return Type(&TyCon{
-			Name:      "top",
-			Canonical: "top",
+			Name:      "()",
+			Canonical: "unit",
 			Module:    "",
 			Node:      pe.node(node),
 		})

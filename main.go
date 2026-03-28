@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"github.com/urfave/cli/v3"
 	"goanna/haskell/parser"
+	"goanna/haskell/rename"
 )
 
 func parseCommand(ctx context.Context, cmd *cli.Command) error {
@@ -32,6 +35,48 @@ func printASTCommand(ctx context.Context, cmd *cli.Command) error {
 	return parser.PrintASTFromFile(filePath)
 }
 
+func renameCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 2 {
+		return fmt.Errorf("usage: rename <dir> <module-name>")
+	}
+	dir := cmd.Args().Get(0)
+	moduleName := cmd.Args().Get(1)
+
+	// Recursively find all *.hs files
+	var modules []*parser.Module
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".hs") {
+			code, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			m := parser.Parse(code, path)
+			if m != nil {
+				modules = append(modules, m)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	rename.RenameAll(modules)
+
+	// Print the AST of the requested module with canonicals
+	for _, m := range modules {
+		fmt.Printf("Module: %s\n", m.Name)
+		if m.Name == moduleName {
+			parser.PrintASTWithCanonicals(m)
+			return nil
+		}
+	}
+	return fmt.Errorf("module %q not found in %s", moduleName, dir)
+}
+
 func main() {
 	cmd := &cli.Command{
 		Name:  "goanna",
@@ -50,10 +95,16 @@ func main() {
 				Action:    sexpCommand,
 			},
 			{
-				Name:      "print-ast",
+				Name:      "ast",
 				Usage:     "Print the AST in indented tree format with type, ID, and location",
 				ArgsUsage: "<file.hs>",
 				Action:    printASTCommand,
+			},
+			{
+				Name:      "rename",
+				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print the AST with canonicals for the given module",
+				ArgsUsage: "<dir> <module-name>",
+				Action:    renameCommand,
 			},
 		},
 	}

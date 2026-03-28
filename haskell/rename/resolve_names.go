@@ -5,13 +5,8 @@ import (
 	"slices"
 )
 
-// Resolve takes a module, rename result, and import map and returns a resolved module
-// Uses a traverser to visit ExpVar nodes and set their canonical names
-func Resolve(module parser.Module, result RenameResult, importMap map[string][]parser.Import) parser.Module {
-	// Create a copy of the module to modify
-	resolvedModule := module
-
-	// Use visitor pattern to traverse the AST and resolve names
+// Resolve mutates the module in place, resolving canonical names for all name nodes.
+func Resolve(module *parser.Module, result RenameResult, importMap map[string][]parser.Import) {
 	visitor := parser.NewTraverser(
 		func(_ int, ast parser.AST, parent parser.AST) int {
 			resolveNode(ast, module.Name, result, importMap)
@@ -19,9 +14,7 @@ func Resolve(module parser.Module, result RenameResult, importMap map[string][]p
 		},
 		0,
 	)
-	visitor.Visit(&resolvedModule, nil)
-
-	return resolvedModule
+	visitor.Visit(module, nil)
 }
 
 // resolveNode processes individual nodes during resolution
@@ -66,9 +59,90 @@ func resolveNode(ast parser.AST, moduleName string, result RenameResult, importM
 		// Choose the most specific identifier
 		if len(candidates) > 0 {
 			mostSpecific := chooseMostSpecific(candidates, moduleName)
-			node.Canonical = mostSpecific.internalName
+			node.Canonical = mostSpecific.getIdentifier().internalName
 		} else {
 			// No match found, keep original name
+			node.Canonical = node.Name
+		}
+
+	case *parser.TyCon:
+		// Find all type identifiers that match the TyCon name
+		candidates := []TypeIdentifier{}
+
+		for _, ty := range result.Types {
+			// Check if name matches
+			if ty.name != node.Name {
+				continue
+			}
+
+			// Check if the effective range envelopes the TyCon location
+			if !envelopesLocation(ty.effectiveRange, node.Loc()) {
+				continue
+			}
+
+			// If TyCon has a module qualifier, only consider that module
+			if node.Module != "" {
+				if ty.module == node.Module {
+					candidates = append(candidates, ty)
+				}
+				continue
+			}
+
+			// For unqualified names, consider identifiers from current module
+			if ty.module == moduleName {
+				candidates = append(candidates, ty)
+				continue
+			}
+
+			// Also consider identifiers from imported modules (must be global)
+			if ty.effectiveRange.global && isImported(ty.module, moduleName, importMap, node.Name) {
+				candidates = append(candidates, ty)
+			}
+		}
+
+		// Choose the most specific identifier
+		if len(candidates) > 0 {
+			mostSpecific := chooseMostSpecific(candidates, moduleName)
+			node.Canonical = mostSpecific.getIdentifier().internalName
+		} else {
+			// No match found, keep original name
+			node.Canonical = node.Name
+		}
+
+	case *parser.InstDecl:
+		// Find all class identifiers that match the InstDecl class name
+		candidates := []ClassIdentifier{}
+
+		for _, cls := range result.Classes {
+			if cls.name != node.Name {
+				continue
+			}
+
+			if !envelopesLocation(cls.effectiveRange, node.Loc()) {
+				continue
+			}
+
+			if node.Module != "" {
+				if cls.module == node.Module {
+					candidates = append(candidates, cls)
+				}
+				continue
+			}
+
+			if cls.module == moduleName {
+				candidates = append(candidates, cls)
+				continue
+			}
+
+			if cls.effectiveRange.global && isImported(cls.module, moduleName, importMap, node.Name) {
+				candidates = append(candidates, cls)
+			}
+		}
+
+		if len(candidates) > 0 {
+			mostSpecific := chooseMostSpecific(candidates, moduleName)
+			node.Canonical = mostSpecific.getIdentifier().internalName
+		} else {
 			node.Canonical = node.Name
 		}
 	}
@@ -120,37 +194,34 @@ func isImported(targetModule string, currentModule string, importMap map[string]
 	return false
 }
 
-// chooseMostSpecific selects the most specific identifier from candidates
-// Priority: local module > foreign module, smallest effective range > larger range
-func chooseMostSpecific(candidates []TermIdentifier, currentModule string) TermIdentifier {
+// chooseMostSpecific selects the most specific identifier from candidates.
+// Priority: local module > foreign module, smallest effective range > larger range.
+func chooseMostSpecific[T HasIdentifier](candidates []T, currentModule string) T {
 	if len(candidates) == 0 {
 		panic("chooseMostSpecific called with empty candidates")
 	}
 
-	// Separate local and foreign identifiers
-	var local []TermIdentifier
-	var foreign []TermIdentifier
+	var local []T
+	var foreign []T
 
 	for _, c := range candidates {
-		if c.module == currentModule {
+		if c.getIdentifier().module == currentModule {
 			local = append(local, c)
 		} else {
 			foreign = append(foreign, c)
 		}
 	}
 
-	// Prefer local module over foreign
-	var toChooseFrom []TermIdentifier
+	var toChooseFrom []T
 	if len(local) > 0 {
 		toChooseFrom = local
 	} else {
 		toChooseFrom = foreign
 	}
 
-	// Among the chosen set, find the one with smallest effective range
 	mostSpecific := toChooseFrom[0]
 	for _, c := range toChooseFrom[1:] {
-		if isMoreSpecific(c.effectiveRange, mostSpecific.effectiveRange) {
+		if isMoreSpecific(c.getIdentifier().effectiveRange, mostSpecific.getIdentifier().effectiveRange) {
 			mostSpecific = c
 		}
 	}
@@ -187,28 +258,19 @@ func isMoreSpecific(range1, range2 EffectiveRange) bool {
 	return false
 }
 
-// ResolveAll takes a list of modules and rename result and returns resolved modules
-// Builds an import map and passes it to each Resolve call
-func ResolveAll(modules []parser.Module, result RenameResult) []parser.Module {
-	// Build import map once for all modules
+// ResolveAll mutates all modules in place, resolving canonical names.
+func ResolveAll(modules []*parser.Module, result RenameResult) {
 	importMap := BuildImportMap(modules)
-
-	resolved := make([]parser.Module, len(modules))
-	for i, module := range modules {
-		resolved[i] = Resolve(module, result, importMap)
+	for _, module := range modules {
+		Resolve(module, result, importMap)
 	}
-	return resolved
 }
 
-// BuildImportMap creates a map from module names to their imports
-// Key: module name (string)
-// Value: list of Import statements from that module
-func BuildImportMap(modules []parser.Module) map[string][]parser.Import {
+// BuildImportMap creates a map from module names to their imports.
+func BuildImportMap(modules []*parser.Module) map[string][]parser.Import {
 	importMap := make(map[string][]parser.Import)
-
 	for _, module := range modules {
 		importMap[module.Name] = module.Imports
 	}
-
 	return importMap
 }

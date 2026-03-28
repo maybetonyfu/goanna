@@ -8,6 +8,68 @@ import (
 )
 
 // PrintAST prints the AST in an indented tree format showing type, ID, location, and children
+// getCanonical returns the Canonical field of a Name node, or "" if it has none.
+func getCanonical(ast AST) string {
+	if n, ok := ast.(Name); ok {
+		// Retrieve via type assertion to the concrete field
+		switch node := n.(type) {
+		case *TyCon:
+			return node.Canonical
+		case *TyVar:
+			return node.Canonical
+		case *PVar:
+			return node.Canonical
+		case *ExpVar:
+			return node.Canonical
+		case *InstDecl:
+			return node.Canonical
+		case *DataCon:
+			return node.Canonical
+		case *DeclHead:
+			return node.Canonical
+		}
+	}
+	return ""
+}
+
+// printASTWithIndentAndCanonicals is like printASTWithIndent but also prints
+// the Canonical name alongside the Name when present.
+func printASTWithIndentAndCanonicals(ast AST, indent int) {
+	if ast == nil {
+		return
+	}
+
+	indentStr := strings.Repeat("  ", indent)
+	typeName := getTypeName(ast)
+	id := ast.Id()
+	loc := ast.Loc()
+	name := getNodeName(ast)
+	canonical := getCanonical(ast)
+
+	switch {
+	case name != "" && canonical != "" && canonical != name:
+		fmt.Printf("%s%s [id=%d, name=\"%s\", canonical=\"%s\"] (line %d-%d, col %d-%d)\n",
+			indentStr, typeName, id, name, canonical,
+			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
+	case name != "":
+		fmt.Printf("%s%s [id=%d, name=\"%s\"] (line %d-%d, col %d-%d)\n",
+			indentStr, typeName, id, name,
+			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
+	default:
+		fmt.Printf("%s%s [id=%d] (line %d-%d, col %d-%d)\n",
+			indentStr, typeName, id,
+			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
+	}
+
+	printChildrenWithCanonicals(ast, indent+1)
+}
+
+// PrintASTWithCanonicals prints the AST of a module, showing Canonical names
+// alongside Name fields where they differ.
+func PrintASTWithCanonicals(ast AST) {
+	printASTWithIndentAndCanonicals(ast, 0)
+}
+
 func PrintAST(ast AST) {
 	printASTWithIndent(ast, 0)
 }
@@ -322,6 +384,193 @@ func printChildren(ast AST, indent int) {
 			printASTWithIndent(assertion, indent)
 		}
 		printASTWithIndent(node.Ty, indent)
+	}
+}
+
+// printChildrenWithCanonicals is like printChildren but uses printASTWithIndentAndCanonicals.
+func printChildrenWithCanonicals(ast AST, indent int) {
+	switch node := ast.(type) {
+	case *Module:
+		for _, decl := range node.Decls {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+		for _, imp := range node.Imports {
+			printASTWithIndentAndCanonicals(&imp, indent)
+		}
+	case *Import:
+	case *DeclHead:
+		for _, typeVar := range node.TypeVars {
+			printASTWithIndentAndCanonicals(&typeVar, indent)
+		}
+	case *DataCon:
+		for _, ty := range node.Tys {
+			printASTWithIndentAndCanonicals(ty, indent)
+		}
+	case *Alt:
+		printASTWithIndentAndCanonicals(node.Pat, indent)
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+		for _, decl := range node.Binds {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+	case *TypeSig:
+		printASTWithIndentAndCanonicals(node.Ty, indent)
+	case *PatBind:
+		printASTWithIndentAndCanonicals(node.Pat, indent)
+		printASTWithIndentAndCanonicals(node.Rhs, indent)
+	case *InstDecl:
+		for _, assertion := range node.Assertions {
+			printASTWithIndentAndCanonicals(assertion, indent)
+		}
+		for _, ty := range node.Types {
+			printASTWithIndentAndCanonicals(ty, indent)
+		}
+		for _, decl := range node.Body {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+	case *ClassDecl:
+		for _, assertion := range node.Assertions {
+			printASTWithIndentAndCanonicals(assertion, indent)
+		}
+		printASTWithIndentAndCanonicals(&node.DHead, indent)
+		for _, decl := range node.Decls {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+	case *DataDecl:
+		printASTWithIndentAndCanonicals(&node.DHead, indent)
+		for _, constructor := range node.Constructors {
+			printASTWithIndentAndCanonicals(&constructor, indent)
+		}
+		for _, derive := range node.Deriving {
+			printASTWithIndentAndCanonicals(&derive, indent)
+		}
+	case *TypeDecl:
+		printASTWithIndentAndCanonicals(&node.DHead, indent)
+		printASTWithIndentAndCanonicals(node.Ty, indent)
+	case *ExpVar:
+	case *ExpApp:
+		printASTWithIndentAndCanonicals(node.Exp1, indent)
+		printASTWithIndentAndCanonicals(node.Exp2, indent)
+	case *ExpInfix:
+		printASTWithIndentAndCanonicals(node.Exp1, indent)
+		printASTWithIndentAndCanonicals(&node.Op, indent)
+		printASTWithIndentAndCanonicals(node.Exp2, indent)
+	case *ExpLambda:
+		for _, pat := range node.Pats {
+			printASTWithIndentAndCanonicals(pat, indent)
+		}
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+	case *ExpLet:
+		for _, decl := range node.Binds {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+	case *ExpIf:
+		printASTWithIndentAndCanonicals(node.Cond, indent)
+		printASTWithIndentAndCanonicals(node.IfTrue, indent)
+		printASTWithIndentAndCanonicals(node.IfFalse, indent)
+	case *ExpDo:
+		for _, stmt := range node.Stmts {
+			printASTWithIndentAndCanonicals(stmt, indent)
+		}
+	case *ExpCase:
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+		for _, alt := range node.Alts {
+			printASTWithIndentAndCanonicals(&alt, indent)
+		}
+	case *ExpTuple:
+		for _, exp := range node.Exps {
+			printASTWithIndentAndCanonicals(exp, indent)
+		}
+	case *ExpList:
+		for _, exp := range node.Exps {
+			printASTWithIndentAndCanonicals(exp, indent)
+		}
+	case *ExpLeftSection:
+		printASTWithIndentAndCanonicals(node.Left, indent)
+		printASTWithIndentAndCanonicals(node.Op, indent)
+	case *ExpRightSection:
+		printASTWithIndentAndCanonicals(node.Op, indent)
+		printASTWithIndentAndCanonicals(node.Right, indent)
+	case *ExpEnumFrom:
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+	case *ExpEnumFromTo:
+		printASTWithIndentAndCanonicals(node.Exp1, indent)
+		printASTWithIndentAndCanonicals(node.Exp2, indent)
+	case *ExpComprehension:
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+		for _, gen := range node.Generators {
+			printASTWithIndentAndCanonicals(&gen, indent)
+		}
+		for _, guard := range node.Guards {
+			printASTWithIndentAndCanonicals(guard, indent)
+		}
+	case *Lit:
+	case *UnguardedRhs:
+		if node.Exp != nil {
+			printASTWithIndentAndCanonicals(node.Exp, indent)
+		}
+		for _, decl := range node.Wheres {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+	case *GuardedRhs:
+		for _, branch := range node.Branches {
+			printASTWithIndentAndCanonicals(&branch, indent)
+		}
+		for _, where := range node.Wheres {
+			printASTWithIndentAndCanonicals(where, indent)
+		}
+	case *GuardBranch:
+		for _, guard := range node.Guards {
+			printASTWithIndentAndCanonicals(guard, indent)
+		}
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+	case *Generator:
+		printASTWithIndentAndCanonicals(node.Pat, indent)
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+	case *Qualifier:
+		printASTWithIndentAndCanonicals(node.Exp, indent)
+	case *LetStmt:
+		for _, decl := range node.Binds {
+			printASTWithIndentAndCanonicals(decl, indent)
+		}
+	case *PWildcard:
+	case *PApp:
+		printASTWithIndentAndCanonicals(&node.Constructor, indent)
+		for _, pat := range node.Pats {
+			printASTWithIndentAndCanonicals(pat, indent)
+		}
+	case *PList:
+		for _, pat := range node.Pats {
+			printASTWithIndentAndCanonicals(pat, indent)
+		}
+	case *PTuple:
+		for _, pat := range node.Pats {
+			printASTWithIndentAndCanonicals(pat, indent)
+		}
+	case *PVar:
+	case *PInfix:
+		printASTWithIndentAndCanonicals(node.Pat1, indent)
+		printASTWithIndentAndCanonicals(&node.Op, indent)
+		printASTWithIndentAndCanonicals(node.Pat2, indent)
+	case *TyCon:
+	case *TyApp:
+		printASTWithIndentAndCanonicals(node.Ty1, indent)
+		printASTWithIndentAndCanonicals(node.Ty2, indent)
+	case *TyFunction:
+		printASTWithIndentAndCanonicals(node.Ty1, indent)
+		printASTWithIndentAndCanonicals(node.Ty2, indent)
+	case *TyTuple:
+		for _, ty := range node.Tys {
+			printASTWithIndentAndCanonicals(ty, indent)
+		}
+	case *TyList:
+		printASTWithIndentAndCanonicals(node.Ty, indent)
+	case *TyVar:
+	case *TyForall:
+		for _, assertion := range node.Assertions {
+			printASTWithIndentAndCanonicals(assertion, indent)
+		}
+		printASTWithIndentAndCanonicals(node.Ty, indent)
 	}
 }
 

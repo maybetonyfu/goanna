@@ -43,6 +43,12 @@ type Rhs interface {
 	isRhs()
 }
 
+// Name is implemented by all node types that carry a Canonical field.
+type Name interface {
+	AST
+	SetCanonical(string)
+}
+
 
 type Node struct {
 	id  int
@@ -60,7 +66,8 @@ type TyCon struct {
 	Node
 }
 
-func (*TyCon) isType() {}
+func (*TyCon) isType()                    {}
+func (t *TyCon) SetCanonical(s string)   { t.Canonical = s }
 func (t *TyCon) Pretty() string {
 	if t.Name == "top" {
 		return "()"
@@ -143,7 +150,8 @@ type TyVar struct {
 	Node
 }
 
-func (*TyVar) isType()          {}
+func (*TyVar) isType()                    {}
+func (t *TyVar) SetCanonical(s string)   { t.Canonical = s }
 func (t *TyVar) Pretty() string { return t.Name }
 func (n *TyVar) Loc() Loc       { return n.Node.loc }
 func (n *TyVar) Id() int        { return n.Node.id }
@@ -264,7 +272,8 @@ type PVar struct {
 	Node
 }
 
-func (*PVar) isPat() {}
+func (*PVar) isPat()                      {}
+func (p *PVar) SetCanonical(s string)    { p.Canonical = s }
 func (pv *PVar) Pretty() string {
 	if isOperator(pv.Name) {
 		return "(" + pv.Name + ")"
@@ -299,7 +308,8 @@ type ExpVar struct {
 	Node
 }
 
-func (*ExpVar) isExp() {}
+func (*ExpVar) isExp()                    {}
+func (v *ExpVar) SetCanonical(s string)  { v.Canonical = s }
 func (v *ExpVar) Pretty() string {
 	if v.Name == "unit" {
 		return "()"
@@ -806,7 +816,8 @@ type InstDecl struct {
 	Node
 }
 
-func (*InstDecl) isDecl() {}
+func (*InstDecl) isDecl()                    {}
+func (id *InstDecl) SetCanonical(s string)   { id.Canonical = s }
 func (id *InstDecl) Pretty() string {
 	result := "instance "
 
@@ -917,6 +928,7 @@ type DataCon struct {
 	Node
 }
 
+func (dc *DataCon) SetCanonical(s string) { dc.Canonical = s }
 func (dc *DataCon) Pretty() string {
 	result := dc.Name
 	if len(dc.Tys) > 0 {
@@ -939,6 +951,7 @@ type DeclHead struct {
 	Node
 }
 
+func (dh *DeclHead) SetCanonical(s string) { dh.Canonical = s }
 func (dh *DeclHead) Pretty() string {
 	result := dh.Name
 	if len(dh.TypeVars) > 0 {

@@ -11,16 +11,14 @@ func TestResolve(t *testing.T) {
 	moduleAST := parser.Parse([]byte(code), "Test")
 	result := env.GenIdentifiers(*moduleAST)
 
-	// Create import map
-	modules := []parser.Module{*moduleAST}
+	modules := []*parser.Module{moduleAST}
 	importMap := BuildImportMap(modules)
 
-	// Resolve should return a module (currently unchanged)
-	resolved := Resolve(*moduleAST, result, importMap)
+	name := moduleAST.Name
+	Resolve(moduleAST, result, importMap)
 
-	// Verify the module is returned
-	if resolved.Name != moduleAST.Name {
-		t.Errorf("Expected module name '%s', got '%s'", moduleAST.Name, resolved.Name)
+	if moduleAST.Name != name {
+		t.Errorf("Expected module name '%s', got '%s'", name, moduleAST.Name)
 	}
 }
 
@@ -32,23 +30,17 @@ func TestResolveAll(t *testing.T) {
 	module1 := parser.Parse([]byte(code1), "Test1")
 	module2 := parser.Parse([]byte(code2), "Test2")
 
-	modules := []parser.Module{*module1, *module2}
-	result := env.GenIdentifiersAll(modules)
+	moduleValues := []parser.Module{*module1, *module2}
+	result := env.GenIdentifiersAll(moduleValues)
 
-	// ResolveAll should return a list of modules (currently unchanged)
-	resolved := ResolveAll(modules, result)
+	modules := []*parser.Module{module1, module2}
+	ResolveAll(modules, result)
 
-	// Verify we get the same number of modules back
-	if len(resolved) != len(modules) {
-		t.Errorf("Expected %d modules, got %d", len(modules), len(resolved))
+	if module1.Name != "Test1" {
+		t.Errorf("Expected first module name 'Test1', got '%s'", module1.Name)
 	}
-
-	// Verify module names are preserved
-	if len(resolved) >= 1 && resolved[0].Name != "Test1" {
-		t.Errorf("Expected first module name 'Test1', got '%s'", resolved[0].Name)
-	}
-	if len(resolved) >= 2 && resolved[1].Name != "Test2" {
-		t.Errorf("Expected second module name 'Test2', got '%s'", resolved[1].Name)
+	if module2.Name != "Test2" {
+		t.Errorf("Expected second module name 'Test2', got '%s'", module2.Name)
 	}
 }
 
@@ -58,34 +50,24 @@ func TestResolveExpVar(t *testing.T) {
 	moduleAST := parser.Parse([]byte(code), "Test")
 	result := env.GenIdentifiers(*moduleAST)
 
-	// Create import map
-	modules := []parser.Module{*moduleAST}
-	importMap := BuildImportMap(modules)
+	importMap := BuildImportMap([]*parser.Module{moduleAST})
+	Resolve(moduleAST, result, importMap)
 
-	// Resolve the module
-	resolved := Resolve(*moduleAST, result, importMap)
-
-	// Find ExpVar nodes and verify they have canonical names set
 	foundExpVar := false
 	visitor := parser.NewTraverser(
 		func(_ int, ast parser.AST, parent parser.AST) int {
 			if expVar, ok := ast.(*parser.ExpVar); ok {
 				foundExpVar = true
-				// Verify canonical name was set (should be non-empty)
 				if expVar.Canonical == "" {
 					t.Errorf("Expected canonical name to be set, got empty string for '%s'", expVar.Name)
 				}
-				// Verify that the canonical name is not the same as the original name
-				// (unless no match was found, in which case it stays as original)
-				// For the variables like 'x' and '+', they should have canonical names
-				// from the rename result
 				t.Logf("Variable '%s' resolved to canonical name '%s'", expVar.Name, expVar.Canonical)
 			}
 			return 0
 		},
 		0,
 	)
-	visitor.Visit(&resolved, nil)
+	visitor.Visit(moduleAST, nil)
 
 	if !foundExpVar {
 		t.Errorf("Expected to find at least one ExpVar node in the resolved module")
@@ -95,18 +77,18 @@ func TestResolveExpVar(t *testing.T) {
 func TestBuildImportMap(t *testing.T) {
 	tests := []struct {
 		name           string
-		modules        []parser.Module
+		modules        []*parser.Module
 		expectedKeys   []string
 		expectedCounts map[string]int
 	}{
 		{
 			name:         "empty modules",
-			modules:      []parser.Module{},
+			modules:      []*parser.Module{},
 			expectedKeys: []string{},
 		},
 		{
 			name: "single module with no imports",
-			modules: []parser.Module{
+			modules: []*parser.Module{
 				{
 					Name:    "Test",
 					Imports: []parser.Import{},
@@ -117,7 +99,7 @@ func TestBuildImportMap(t *testing.T) {
 		},
 		{
 			name: "multiple modules with different imports",
-			modules: []parser.Module{
+			modules: []*parser.Module{
 				{
 					Name: "ModuleA",
 					Imports: []parser.Import{
@@ -169,12 +151,8 @@ func TestResolveExpVarToInternalName(t *testing.T) {
 	moduleAST := parser.Parse([]byte(code), "Test")
 	result := env.GenIdentifiers(*moduleAST)
 
-	// Create import map
-	modules := []parser.Module{*moduleAST}
-	importMap := BuildImportMap(modules)
-
-	// Resolve the module
-	resolved := Resolve(*moduleAST, result, importMap)
+	importMap := BuildImportMap([]*parser.Module{moduleAST})
+	Resolve(moduleAST, result, importMap)
 
 	// Find the internal name of identifier 'x'
 	var xInternalName string
@@ -207,7 +185,7 @@ func TestResolveExpVarToInternalName(t *testing.T) {
 		},
 		0,
 	)
-	visitor.Visit(&resolved, nil)
+	visitor.Visit(moduleAST, nil)
 
 	if !foundX {
 		t.Errorf("Expected to find ExpVar 'x' in the resolved module")

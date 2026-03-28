@@ -114,36 +114,80 @@ func TestGenUniqName(t *testing.T) {
 }
 
 func TestIntern(t *testing.T) {
+	global := EffectiveRange{global: true}
 	env := &RenameEnv{}
 
 	// First call should generate V0
-	result1 := env.Intern("foo", "Main")
+	result1 := env.Intern("foo", "Main", global)
 	if result1 != "V0" {
-		t.Errorf("First Intern('foo', 'Main') = %s, want V0", result1)
+		t.Errorf("First Intern('foo', 'Main', global) = %s, want V0", result1)
 	}
 
-	// Second call with same symbol and module should return same name
-	result2 := env.Intern("foo", "Main")
+	// Second call with same symbol, module, and effectiveRange should return same name
+	result2 := env.Intern("foo", "Main", global)
 	if result2 != "V0" {
-		t.Errorf("Second Intern('foo', 'Main') = %s, want V0", result2)
+		t.Errorf("Second Intern('foo', 'Main', global) = %s, want V0", result2)
 	}
 
 	// Different symbol in same module should get new name
-	result3 := env.Intern("bar", "Main")
+	result3 := env.Intern("bar", "Main", global)
 	if result3 != "V1" {
-		t.Errorf("Intern('bar', 'Main') = %s, want V1", result3)
+		t.Errorf("Intern('bar', 'Main', global) = %s, want V1", result3)
 	}
 
 	// Same symbol in different module should get new name
-	result4 := env.Intern("foo", "Other")
+	result4 := env.Intern("foo", "Other", global)
 	if result4 != "V2" {
-		t.Errorf("Intern('foo', 'Other') = %s, want V2", result4)
+		t.Errorf("Intern('foo', 'Other', global) = %s, want V2", result4)
 	}
 
 	// Verify the first one still returns the same name
-	result5 := env.Intern("foo", "Main")
+	result5 := env.Intern("foo", "Main", global)
 	if result5 != "V0" {
-		t.Errorf("Third Intern('foo', 'Main') = %s, want V0", result5)
+		t.Errorf("Third Intern('foo', 'Main', global) = %s, want V0", result5)
+	}
+
+	// Same symbol and module but different effectiveRange should get a new name
+	local := EffectiveRange{global: false, ranges: []parser.Loc{parser.NewLoc(1, 1, 5, 10)}}
+	result6 := env.Intern("foo", "Main", local)
+	if result6 == "V0" {
+		t.Errorf("Intern('foo', 'Main', local) should differ from global intern, got V0")
+	}
+
+	// Same local effectiveRange should return the same name
+	result7 := env.Intern("foo", "Main", local)
+	if result7 != result6 {
+		t.Errorf("Intern('foo', 'Main', local) second call = %s, want %s", result7, result6)
+	}
+}
+
+func TestInternWhereClauseShadowing(t *testing.T) {
+	// 'x = x where x = 1' should produce a global x and a distinct local x
+	code := "x = x where x = 1"
+	env := &RenameEnv{}
+	moduleAST := parser.Parse([]byte(code), "Test")
+	result := env.GenIdentifiers(*moduleAST)
+
+	var globalX, localX *TermIdentifier
+	for i := range result.Terms {
+		term := &result.Terms[i]
+		if term.name == "x" && term.module == "Test" {
+			if term.effectiveRange.global {
+				globalX = term
+			} else {
+				localX = term
+			}
+		}
+	}
+
+	if globalX == nil {
+		t.Fatal("Expected a global term identifier 'x', not found")
+	}
+	if localX == nil {
+		t.Fatal("Expected a local term identifier 'x' (from where clause), not found")
+	}
+	if globalX.internalName == localX.internalName {
+		t.Errorf("Global x and local x should have different internal names, both got %s", globalX.internalName)
 	}
 }
 

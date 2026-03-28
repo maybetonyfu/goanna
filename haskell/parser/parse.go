@@ -198,6 +198,28 @@ func parse(code []byte, altname string) *Module {
 }
 
 // ParseFile reads a Haskell file, parses it, and prints the AST
+// guessModuleName converts a file path to a module name
+// Example: ./data/list.hs -> Data.List
+func guessModuleName(filePath string) string {
+	// Remove .hs extension
+	path := strings.TrimSuffix(filePath, ".hs")
+
+	// Remove leading ./ if present
+	path = strings.TrimPrefix(path, "./")
+
+	// Split by / and capitalize each part
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		if len(part) > 0 {
+			// Capitalize first letter
+			parts[i] = strings.ToUpper(string(part[0])) + part[1:]
+		}
+	}
+
+	// Join with dots
+	return strings.Join(parts, ".")
+}
+
 func ParseFile(filePath string) error {
 	// Read the file
 	code, err := os.ReadFile(filePath)
@@ -206,12 +228,9 @@ func ParseFile(filePath string) error {
 	}
 
 	// Extract module name from file path
-	moduleName := "Main"
-	if strings.Contains(filePath, "/") {
-		parts := strings.Split(filePath, "/")
-		moduleName = strings.TrimSuffix(parts[len(parts)-1], ".hs")
-	} else {
-		moduleName = strings.TrimSuffix(filePath, ".hs")
+	moduleName := guessModuleName(filePath)
+	if moduleName == "" {
+		moduleName = "Main"
 	}
 
 	// Parse the module
