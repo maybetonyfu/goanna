@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	treesitter "github.com/tree-sitter/go-tree-sitter"
@@ -197,12 +198,17 @@ func parse(code []byte, altname string) *Module {
 	}
 }
 
-// ParseFile reads a Haskell file, parses it, and prints the AST
-// guessModuleName converts a file path to a module name
-// Example: ./data/list.hs -> Data.List
-func guessModuleName(filePath string) string {
+// GuessModuleName converts a file path to a Haskell module name relative to baseDir.
+// Example: baseDir="src", filePath="src/data/list.hs" -> "Data.List"
+func GuessModuleName(filePath string, baseDir string) string {
+	// Make the path relative to baseDir if possible
+	rel, err := filepath.Rel(baseDir, filePath)
+	if err != nil {
+		rel = filePath
+	}
+
 	// Remove .hs extension
-	path := strings.TrimSuffix(filePath, ".hs")
+	path := strings.TrimSuffix(rel, ".hs")
 
 	// Remove leading ./ if present
 	path = strings.TrimPrefix(path, "./")
@@ -211,32 +217,26 @@ func guessModuleName(filePath string) string {
 	parts := strings.Split(path, "/")
 	for i, part := range parts {
 		if len(part) > 0 {
-			// Capitalize first letter
 			parts[i] = strings.ToUpper(string(part[0])) + part[1:]
 		}
 	}
 
-	// Join with dots
 	return strings.Join(parts, ".")
 }
 
 func ParseFile(filePath string) error {
-	// Read the file
 	code, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("error reading file: %w", err)
 	}
 
-	// Extract module name from file path
-	moduleName := guessModuleName(filePath)
+	baseDir := filepath.Dir(filePath)
+	moduleName := GuessModuleName(filePath, baseDir)
 	if moduleName == "" {
 		moduleName = "Main"
 	}
 
-	// Parse the module
 	module := parse(code, moduleName)
-
-	// Print the AST
 	if module == nil {
 		return fmt.Errorf("error parsing file")
 	}

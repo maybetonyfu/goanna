@@ -36,13 +36,11 @@ func printASTCommand(ctx context.Context, cmd *cli.Command) error {
 }
 
 func renameCommand(ctx context.Context, cmd *cli.Command) error {
-	if cmd.Args().Len() < 2 {
-		return fmt.Errorf("usage: rename <dir> <module-name>")
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: rename <dir>")
 	}
 	dir := cmd.Args().Get(0)
-	moduleName := cmd.Args().Get(1)
 
-	// Recursively find all *.hs files
 	var modules []*parser.Module
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -53,7 +51,8 @@ func renameCommand(ctx context.Context, cmd *cli.Command) error {
 			if err != nil {
 				return err
 			}
-			m := parser.Parse(code, path)
+			moduleName := parser.GuessModuleName(path, dir)
+			m := parser.Parse(code, moduleName)
 			if m != nil {
 				modules = append(modules, m)
 			}
@@ -66,15 +65,11 @@ func renameCommand(ctx context.Context, cmd *cli.Command) error {
 
 	rename.RenameAll(modules)
 
-	// Print the AST of the requested module with canonicals
 	for _, m := range modules {
-		fmt.Printf("Module: %s\n", m.Name)
-		if m.Name == moduleName {
-			parser.PrintASTWithCanonicals(m)
-			return nil
-		}
+		fmt.Printf("\n======== %s ========\n\n", m.Name)
+		parser.PrintASTWithCanonicals(m)
 	}
-	return fmt.Errorf("module %q not found in %s", moduleName, dir)
+	return nil
 }
 
 func main() {
@@ -102,8 +97,8 @@ func main() {
 			},
 			{
 				Name:      "rename",
-				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print the AST with canonicals for the given module",
-				ArgsUsage: "<dir> <module-name>",
+				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print all module ASTs with canonicals",
+				ArgsUsage: "<dir>",
 				Action:    renameCommand,
 			},
 		},

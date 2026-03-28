@@ -27,8 +27,8 @@ func (t Traverser[T]) visit(ast AST, parent AST) {
 		}
 	// Misc
 	case *DeclHead:
-		for _, typeVar := range node.TypeVars {
-			t.visit(&typeVar, node)
+		for i := range node.TypeVars {
+			t.visit(&node.TypeVars[i], node)
 		}
 	case *DataCon:
 		for _, ty := range node.Tys {
@@ -50,8 +50,8 @@ func (t Traverser[T]) visit(ast AST, parent AST) {
 		t.visit(node.Rhs, node)
 
 	case *InstDecl:
-		for _, assertion := range node.Assertions {
-			t.visit(assertion, node)
+		for i := range node.Assertions {
+			t.visit(&node.Assertions[i], node)
 		}
 		for _, ty := range node.Types {
 			t.visit(ty, node)
@@ -60,19 +60,19 @@ func (t Traverser[T]) visit(ast AST, parent AST) {
 			t.visit(decl, node)
 		}
 	case *ClassDecl:
-		for _, assertion := range node.Assertions {
-			t.visit(assertion, node)
+		for i := range node.Assertions {
+			t.visit(&node.Assertions[i], node)
 		}
 		for _, decl := range node.Decls {
 			t.visit(decl, node)
 		}
 		t.visit(&node.DHead, node)
 	case *DataDecl:
-		for _, constructor := range node.Constructors {
-			t.visit(&constructor, node)
+		for i := range node.Constructors {
+			t.visit(&node.Constructors[i], node)
 		}
-		for _, derive := range node.Deriving {
-			t.visit(&derive, node)
+		for i := range node.Deriving {
+			t.visit(&node.Deriving[i], node)
 		}
 		t.visit(&node.DHead, node)
 	case *TypeDecl:
@@ -205,8 +205,8 @@ func (t Traverser[T]) visit(ast AST, parent AST) {
 		t.visit(node.Ty, node)
 	case *TyVar:
 	case *TyForall:
-		for _, assertion := range node.Assertions {
-			t.visit(assertion, node)
+		for i := range node.Assertions {
+			t.visit(&node.Assertions[i], node)
 		}
 		t.visit(node.Ty, node)
 	}

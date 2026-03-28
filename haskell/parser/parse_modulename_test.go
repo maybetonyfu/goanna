@@ -47,9 +47,9 @@ func TestGuessModuleName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := guessModuleName(tt.filePath)
+			result := GuessModuleName(tt.filePath, ".")
 			if result != tt.expected {
-				t.Errorf("guessModuleName(%q) = %q, want %q", tt.filePath, result, tt.expected)
+				t.Errorf("GuessModuleName(%q, \".\") = %q, want %q", tt.filePath, result, tt.expected)
 			}
 		})
 	}

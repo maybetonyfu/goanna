@@ -1,6 +1,6 @@
-module Example where
-import Test2
+module Main where
 
-y = x
+import Test
 
-data Bool = True | False
+y = Test.x
+

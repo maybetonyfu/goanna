@@ -109,41 +109,48 @@ func resolveNode(ast parser.AST, moduleName string, result RenameResult, importM
 			node.Canonical = node.Name
 		}
 
-	case *parser.InstDecl:
-		// Find all class identifiers that match the InstDecl class name
+	case *parser.InstDecl, *parser.Assertion:
+		// Both InstDecl and Assertion resolve against class identifiers
+		var name, module string
+		switch n := node.(type) {
+		case *parser.InstDecl:
+			name, module = n.Name, n.Module
+		case *parser.Assertion:
+			name, module = n.Name, n.Module
+		}
+
 		candidates := []ClassIdentifier{}
-
 		for _, cls := range result.Classes {
-			if cls.name != node.Name {
+			if cls.name != name {
 				continue
 			}
-
-			if !envelopesLocation(cls.effectiveRange, node.Loc()) {
+			if !envelopesLocation(cls.effectiveRange, ast.Loc()) {
 				continue
 			}
-
-			if node.Module != "" {
-				if cls.module == node.Module {
+			if module != "" {
+				if cls.module == module {
 					candidates = append(candidates, cls)
 				}
 				continue
 			}
-
 			if cls.module == moduleName {
 				candidates = append(candidates, cls)
 				continue
 			}
-
-			if cls.effectiveRange.global && isImported(cls.module, moduleName, importMap, node.Name) {
+			if cls.effectiveRange.global && isImported(cls.module, moduleName, importMap, name) {
 				candidates = append(candidates, cls)
 			}
 		}
 
+		canonical := name
 		if len(candidates) > 0 {
-			mostSpecific := chooseMostSpecific(candidates, moduleName)
-			node.Canonical = mostSpecific.getIdentifier().internalName
-		} else {
-			node.Canonical = node.Name
+			canonical = chooseMostSpecific(candidates, moduleName).getIdentifier().internalName
+		}
+		switch n := node.(type) {
+		case *parser.InstDecl:
+			n.Canonical = canonical
+		case *parser.Assertion:
+			n.Canonical = canonical
 		}
 	}
 }

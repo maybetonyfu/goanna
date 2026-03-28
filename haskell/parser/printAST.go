@@ -3,11 +3,48 @@ package parser
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
-// PrintAST prints the AST in an indented tree format showing type, ID, location, and children
+var mutedColor = color.New(color.FgHiBlack)
+
+// formatNodeLine formats a single AST node as a compact line.
+// withCanonical controls whether canonical names are included.
+// Format: TypeName {#id, name, canonical} (fromLine,fromCol)-(toLine,toCol)
+// Fields inside {} are omitted if empty. The {} block is omitted entirely if all fields are empty.
+func formatNodeLine(ast AST, withCanonical bool) string {
+	typeName := getTypeName(ast)
+	id := ast.Id()
+	loc := ast.Loc()
+
+	locStr := mutedColor.Sprintf("(%d,%d)-(%d,%d)", loc.FromLine(), loc.FromCol(), loc.ToLine(), loc.ToCol())
+
+	// Build inner fields: id always present, name and canonical optional
+	inner := fmt.Sprintf("#%d", id)
+
+	name := getNodeName(ast)
+	if name != "" {
+		inner += ", " + name
+		if withCanonical {
+			var canonical string
+			if _, ok := ast.(*TypeSig); ok {
+				canonical = getTypeSigCanonicals(ast)
+			} else {
+				canonical = getCanonical(ast)
+			}
+			if canonical != "" && canonical != name {
+				inner += ", " + canonical
+			}
+		}
+	}
+
+	return fmt.Sprintf("%s {%s} %s", typeName, inner, locStr)
+}
+
 // getCanonical returns the Canonical field of a Name node, or "" if it has none.
 func getCanonical(ast AST) string {
 	if n, ok := ast.(Name); ok {
@@ -27,6 +64,8 @@ func getCanonical(ast AST) string {
 			return node.Canonical
 		case *DeclHead:
 			return node.Canonical
+		case *Assertion:
+			return node.Canonical
 		}
 	}
 	return ""
@@ -38,29 +77,7 @@ func printASTWithIndentAndCanonicals(ast AST, indent int) {
 	if ast == nil {
 		return
 	}
-
-	indentStr := strings.Repeat("  ", indent)
-	typeName := getTypeName(ast)
-	id := ast.Id()
-	loc := ast.Loc()
-	name := getNodeName(ast)
-	canonical := getCanonical(ast)
-
-	switch {
-	case name != "" && canonical != "" && canonical != name:
-		fmt.Printf("%s%s [id=%d, name=\"%s\", canonical=\"%s\"] (line %d-%d, col %d-%d)\n",
-			indentStr, typeName, id, name, canonical,
-			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
-	case name != "":
-		fmt.Printf("%s%s [id=%d, name=\"%s\"] (line %d-%d, col %d-%d)\n",
-			indentStr, typeName, id, name,
-			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
-	default:
-		fmt.Printf("%s%s [id=%d] (line %d-%d, col %d-%d)\n",
-			indentStr, typeName, id,
-			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
-	}
-
+	fmt.Printf("%s%s\n", strings.Repeat("  ", indent), formatNodeLine(ast, true))
 	printChildrenWithCanonicals(ast, indent+1)
 }
 
@@ -79,30 +96,15 @@ func printASTWithIndent(ast AST, indent int) {
 	if ast == nil {
 		return
 	}
-
-	indentStr := strings.Repeat("  ", indent)
-	typeName := getTypeName(ast)
-	id := ast.Id()
-	loc := ast.Loc()
-	name := getNodeName(ast)
-
-	// Print the node with type, ID, name (if available), and location
-	if name != "" {
-		fmt.Printf("%s%s [id=%d, name=\"%s\"] (line %d-%d, col %d-%d)\n",
-			indentStr, typeName, id, name,
-			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
-	} else {
-		fmt.Printf("%s%s [id=%d] (line %d-%d, col %d-%d)\n",
-			indentStr, typeName, id,
-			loc.FromLine(), loc.ToLine(), loc.FromCol(), loc.ToCol())
-	}
-
-	// Print children with one additional level of indentation
+	fmt.Printf("%s%s\n", strings.Repeat("  ", indent), formatNodeLine(ast, false))
 	printChildren(ast, indent+1)
 }
 
 // getTypeName returns the type name of an AST node without the package prefix
 func getTypeName(ast AST) string {
+	if _, ok := ast.(*Assertion); ok {
+		return "Assertion"
+	}
 	t := reflect.TypeOf(ast)
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
@@ -121,7 +123,7 @@ func getNodeName(ast AST) string {
 		return node.Name
 	case *ExpVar:
 		if node.Module != "" {
-			return fmt.Sprintf("%s%s", node.Module, node.Name)
+			return fmt.Sprintf("%s.%s", node.Module, node.Name)
 		} else {
 			return node.Name
 		}
@@ -133,9 +135,24 @@ func getNodeName(ast AST) string {
 		return node.Name
 	case *Module:
 		return node.Name
+	case *TypeSig:
+		return strings.Join(node.Names, ", ")
+	case *Assertion:
+		if node.Module != "" {
+			return node.Module + "." + node.Name
+		}
+		return node.Name
 	default:
 		return ""
 	}
+}
+
+// getTypeSigCanonicals returns the Canonicals of a TypeSig joined with ", ", or "".
+func getTypeSigCanonicals(ast AST) string {
+	if ts, ok := ast.(*TypeSig); ok && len(ts.Canonicals) > 0 {
+		return strings.Join(ts.Canonicals, ", ")
+	}
+	return ""
 }
 
 // printChildren prints all child nodes of an AST node
@@ -157,8 +174,8 @@ func printChildren(ast AST, indent int) {
 
 	// Misc nodes
 	case *DeclHead:
-		for _, typeVar := range node.TypeVars {
-			printASTWithIndent(&typeVar, indent)
+		for i := range node.TypeVars {
+			printASTWithIndent(&node.TypeVars[i], indent)
 		}
 
 	case *DataCon:
@@ -182,8 +199,8 @@ func printChildren(ast AST, indent int) {
 		printASTWithIndent(node.Rhs, indent)
 
 	case *InstDecl:
-		for _, assertion := range node.Assertions {
-			printASTWithIndent(assertion, indent)
+		for i := range node.Assertions {
+			printASTWithIndent(&node.Assertions[i], indent)
 		}
 		for _, ty := range node.Types {
 			printASTWithIndent(ty, indent)
@@ -193,8 +210,8 @@ func printChildren(ast AST, indent int) {
 		}
 
 	case *ClassDecl:
-		for _, assertion := range node.Assertions {
-			printASTWithIndent(assertion, indent)
+		for i := range node.Assertions {
+			printASTWithIndent(&node.Assertions[i], indent)
 		}
 		printASTWithIndent(&node.DHead, indent)
 		for _, decl := range node.Decls {
@@ -379,9 +396,13 @@ func printChildren(ast AST, indent int) {
 	case *TyVar:
 		// Leaf node
 
+	case *Assertion:
+		for _, ty := range node.Types {
+			printASTWithIndent(ty, indent)
+		}
 	case *TyForall:
-		for _, assertion := range node.Assertions {
-			printASTWithIndent(assertion, indent)
+		for i := range node.Assertions {
+			printASTWithIndent(&node.Assertions[i], indent)
 		}
 		printASTWithIndent(node.Ty, indent)
 	}
@@ -399,8 +420,8 @@ func printChildrenWithCanonicals(ast AST, indent int) {
 		}
 	case *Import:
 	case *DeclHead:
-		for _, typeVar := range node.TypeVars {
-			printASTWithIndentAndCanonicals(&typeVar, indent)
+		for i := range node.TypeVars {
+			printASTWithIndentAndCanonicals(&node.TypeVars[i], indent)
 		}
 	case *DataCon:
 		for _, ty := range node.Tys {
@@ -418,8 +439,8 @@ func printChildrenWithCanonicals(ast AST, indent int) {
 		printASTWithIndentAndCanonicals(node.Pat, indent)
 		printASTWithIndentAndCanonicals(node.Rhs, indent)
 	case *InstDecl:
-		for _, assertion := range node.Assertions {
-			printASTWithIndentAndCanonicals(assertion, indent)
+		for i := range node.Assertions {
+			printASTWithIndentAndCanonicals(&node.Assertions[i], indent)
 		}
 		for _, ty := range node.Types {
 			printASTWithIndentAndCanonicals(ty, indent)
@@ -428,8 +449,8 @@ func printChildrenWithCanonicals(ast AST, indent int) {
 			printASTWithIndentAndCanonicals(decl, indent)
 		}
 	case *ClassDecl:
-		for _, assertion := range node.Assertions {
-			printASTWithIndentAndCanonicals(assertion, indent)
+		for i := range node.Assertions {
+			printASTWithIndentAndCanonicals(&node.Assertions[i], indent)
 		}
 		printASTWithIndentAndCanonicals(&node.DHead, indent)
 		for _, decl := range node.Decls {
@@ -437,11 +458,11 @@ func printChildrenWithCanonicals(ast AST, indent int) {
 		}
 	case *DataDecl:
 		printASTWithIndentAndCanonicals(&node.DHead, indent)
-		for _, constructor := range node.Constructors {
-			printASTWithIndentAndCanonicals(&constructor, indent)
+		for i := range node.Constructors {
+			printASTWithIndentAndCanonicals(&node.Constructors[i], indent)
 		}
-		for _, derive := range node.Deriving {
-			printASTWithIndentAndCanonicals(&derive, indent)
+		for i := range node.Deriving {
+			printASTWithIndentAndCanonicals(&node.Deriving[i], indent)
 		}
 	case *TypeDecl:
 		printASTWithIndentAndCanonicals(&node.DHead, indent)
@@ -566,9 +587,13 @@ func printChildrenWithCanonicals(ast AST, indent int) {
 	case *TyList:
 		printASTWithIndentAndCanonicals(node.Ty, indent)
 	case *TyVar:
+	case *Assertion:
+		for _, ty := range node.Types {
+			printASTWithIndentAndCanonicals(ty, indent)
+		}
 	case *TyForall:
-		for _, assertion := range node.Assertions {
-			printASTWithIndentAndCanonicals(assertion, indent)
+		for i := range node.Assertions {
+			printASTWithIndentAndCanonicals(&node.Assertions[i], indent)
 		}
 		printASTWithIndentAndCanonicals(node.Ty, indent)
 	}
@@ -581,7 +606,13 @@ func PrintASTFromFile(filePath string) error {
 		return err
 	}
 
-	module := Parse(code, filePath)
+	baseDir := filepath.Dir(filePath)
+	moduleName := GuessModuleName(filePath, baseDir)
+	if moduleName == "" {
+		moduleName = "Main"
+	}
+
+	module := Parse(code, moduleName)
 	if module == nil {
 		return fmt.Errorf("failed to parse file: %s", filePath)
 	}

@@ -156,9 +156,36 @@ func (t *TyVar) Pretty() string { return t.Name }
 func (n *TyVar) Loc() Loc       { return n.Node.loc }
 func (n *TyVar) Id() int        { return n.Node.id }
 
+// Assertion represents a typeclass constraint, e.g. "Eq a" or "Functor f"
+type Assertion struct {
+	Name      string
+	Module    string
+	Canonical string
+	Types     []Type
+	Node
+}
+
+func (a *Assertion) SetCanonical(s string) { a.Canonical = s }
+func (a *Assertion) Pretty() string {
+	name := a.Name
+	if a.Module != "" {
+		name = a.Module + "." + a.Name
+	}
+	if len(a.Types) == 0 {
+		return name
+	}
+	parts := make([]string, len(a.Types))
+	for i, t := range a.Types {
+		parts[i] = t.Pretty()
+	}
+	return name + " " + strings.Join(parts, " ")
+}
+func (n *Assertion) Loc() Loc { return n.Node.loc }
+func (n *Assertion) Id() int  { return n.Node.id }
+
 // TyForall
 type TyForall struct {
-	Assertions []Type
+	Assertions []Assertion
 	Ty         Type
 	Axiom      bool
 	Node
@@ -171,8 +198,8 @@ func (tf *TyForall) Pretty() string {
 	// Add context/assertions if present (Eq a => ...)
 	if len(tf.Assertions) > 0 {
 		assertStrs := make([]string, len(tf.Assertions))
-		for i, assertion := range tf.Assertions {
-			assertStrs[i] = assertion.Pretty()
+		for i := range tf.Assertions {
+			assertStrs[i] = tf.Assertions[i].Pretty()
 		}
 		result += strings.Join(assertStrs, ", ") + " => "
 	}
@@ -768,7 +795,7 @@ func (n *DataDecl) Id() int  { return n.Node.id }
 
 // ClassDecl
 type ClassDecl struct {
-	Assertions []Type
+	Assertions []Assertion
 	DHead      DeclHead
 	Decls      []Decl
 	Node
@@ -781,8 +808,8 @@ func (cd *ClassDecl) Pretty() string {
 	// Add context/assertions if present
 	if len(cd.Assertions) > 0 {
 		assertStrs := make([]string, len(cd.Assertions))
-		for i, assertion := range cd.Assertions {
-			assertStrs[i] = assertion.Pretty()
+		for i := range cd.Assertions {
+			assertStrs[i] = cd.Assertions[i].Pretty()
 		}
 		result += strings.Join(assertStrs, ", ") + " => "
 	}
@@ -807,7 +834,7 @@ func (n *ClassDecl) Id() int  { return n.Node.id }
 
 // InstDecl
 type InstDecl struct {
-	Assertions []Type
+	Assertions []Assertion
 	Name       string
 	Module     string
 	Canonical  string
@@ -824,8 +851,8 @@ func (id *InstDecl) Pretty() string {
 	// Add context/assertions if present
 	if len(id.Assertions) > 0 {
 		assertStrs := make([]string, len(id.Assertions))
-		for i, assertion := range id.Assertions {
-			assertStrs[i] = assertion.Pretty()
+		for i := range id.Assertions {
+			assertStrs[i] = id.Assertions[i].Pretty()
 		}
 		result += strings.Join(assertStrs, ", ") + " => "
 	}

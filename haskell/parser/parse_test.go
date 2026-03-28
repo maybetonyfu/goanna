@@ -120,9 +120,9 @@ func TestTyForall(t *testing.T) {
 	}
 
 	cases := []testcase{
-		{"f :: Eq a => a -> a -> Bool", "f :: (Eq a) => a -> (a -> (Bool))"},
-		{"g :: Ord a => a -> a -> a", "g :: (Ord a) => a -> (a -> (a))"},
-		{"h :: Eq a => Eq b => a -> b -> Bool", "h :: (Eq a) => (Eq b) => a -> (b -> (Bool))"},
+		{"f :: Eq a => a -> a -> Bool", "f :: Eq a => a -> (a -> (Bool))"},
+		{"g :: Ord a => a -> a -> a", "g :: Ord a => a -> (a -> (a))"},
+		{"h :: Eq a => Eq b => a -> b -> Bool", "h :: Eq a => Eq b => a -> (b -> (Bool))"},
 	}
 
 	for _, tc := range cases {
@@ -514,7 +514,7 @@ func TestClassDecl(t *testing.T) {
 		{
 			`class Ord a => Bounded a where
   minBound :: a`,
-			"class (Ord a) => Bounded a where minBound :: a",
+			"class Ord a => Bounded a where minBound :: a",
 		},
 	}
 
@@ -539,7 +539,7 @@ func TestInstDecl(t *testing.T) {
 		{
 			`instance Show a => Show (Maybe a) where
   show = showMaybe`,
-			"instance (Show a) => Show (Maybe a) where show = showMaybe",
+			"instance Show a => Show (Maybe a) where show = showMaybe",
 		},
 	}
 

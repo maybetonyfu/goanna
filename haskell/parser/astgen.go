@@ -2,6 +2,7 @@ package parser
 
 import (
 	"slices"
+	"strings"
 
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -310,7 +311,7 @@ func (pe parseEnv) parsePats(nodes []treesitter.Node) []Pat {
 func (pe parseEnv) parsePat(node *treesitter.Node) Pat {
 	switch node.Kind() {
 	case "qualified":
-		module := pe.text(pe.child(node, "module"))
+		module := strings.TrimSuffix(pe.text(pe.child(node, "module")), ".")
 		name := pe.text(pe.child(node, "id"))
 		return Pat(&PVar{
 			Name:      name,
@@ -448,41 +449,84 @@ func (pe parseEnv) parseRhs(node *treesitter.Node) Rhs {
 	})
 }
 
-func (pe parseEnv) parseAssertions(node *treesitter.Node) []Type {
+func (pe parseEnv) parseAssertion(node *treesitter.Node) Assertion {
+	// An assertion is typically "apply" with a TyCon head and type args,
+	// e.g. "Eq a" -> apply(name="Eq", variable="a")
+	switch node.Kind() {
+	case "apply":
+		constructor := pe.child(node, "constructor")
+		argument := pe.child(node, "argument")
+		name, module := "", ""
+		if constructor != nil {
+			if constructor.Kind() == "qualified" {
+				module = strings.TrimSuffix(pe.text(pe.child(constructor, "module")), ".")
+				name = pe.text(pe.child(constructor, "id"))
+			} else {
+				name = pe.text(constructor)
+			}
+		}
+		types := []Type{}
+		if argument != nil {
+			types = append(types, pe.parseType(argument))
+		}
+		return Assertion{
+			Name:   name,
+			Module: module,
+			Types:  types,
+			Node:   pe.node(node),
+		}
+	case "qualified":
+		module := strings.TrimSuffix(pe.text(pe.child(node, "module")), ".")
+		name := pe.text(pe.child(node, "id"))
+		return Assertion{
+			Name:   name,
+			Module: module,
+			Types:  []Type{},
+			Node:   pe.node(node),
+		}
+	case "name":
+		return Assertion{
+			Name:  pe.text(node),
+			Types: []Type{},
+			Node:  pe.node(node),
+		}
+	default:
+		return Assertion{
+			Name:  pe.text(node),
+			Types: []Type{},
+			Node:  pe.node(node),
+		}
+	}
+}
+
+func (pe parseEnv) parseAssertions(node *treesitter.Node) []Assertion {
 	if node == nil {
-		return []Type{}
+		return []Assertion{}
 	}
 	switch node.Kind() {
 	case "context":
-		// Extract the actual assertion from the context node
 		contextNode := pe.child(node, "context")
 		if contextNode != nil {
 			return pe.parseAssertions(contextNode)
 		}
-		// If no context child, try parsing the whole node as a type
-		ty := pe.parseType(node)
-		if ty != nil {
-			return []Type{ty}
-		}
-		return []Type{}
+		return []Assertion{pe.parseAssertion(node)}
 	case "parens":
-		return []Type{
-			pe.parseType(node.Child(1)),
+		inner := node.Child(1)
+		if inner != nil {
+			return []Assertion{pe.parseAssertion(inner)}
 		}
+		return []Assertion{}
 	case "tuple":
-		return pe.parseTypes(pe.children(node, "*"))
-
+		children := pe.children(node, "*")
+		assertions := make([]Assertion, 0, len(children))
+		for i := range children {
+			assertions = append(assertions, pe.parseAssertion(&children[i]))
+		}
+		return assertions
 	case "apply":
-		return []Type{
-			pe.parseType(node),
-		}
+		return []Assertion{pe.parseAssertion(node)}
 	default:
-		// For single assertion type that doesn't match specific cases, try parsing as type
-		ty := pe.parseType(node)
-		if ty != nil {
-			return []Type{ty}
-		}
-		return []Type{}
+		return []Assertion{pe.parseAssertion(node)}
 	}
 }
 func (pe parseEnv) parseTypes(nodes []treesitter.Node) []Type {
@@ -501,7 +545,7 @@ func (pe parseEnv) parseType(node *treesitter.Node) Type {
 	}
 	switch node.Kind() {
 	case "qualified":
-		module := pe.text(pe.child(node, "module"))
+		module := strings.TrimSuffix(pe.text(pe.child(node, "module")), ".")
 		name := pe.text(pe.child(node, "id"))
 		return Type(&TyCon{
 			Name:      name,
@@ -632,7 +676,7 @@ func (pe parseEnv) parseExps(nodes []treesitter.Node) []Exp {
 func (pe parseEnv) parseExp(node *treesitter.Node) Exp {
 	switch node.Kind() {
 	case "qualified":
-		module := pe.text(pe.child(node, "module"))
+		module := strings.TrimSuffix(pe.text(pe.child(node, "module")), ".")
 		id := pe.child(node, "id")
 		return Exp(&ExpVar{
 			Name:      pe.text(id),
