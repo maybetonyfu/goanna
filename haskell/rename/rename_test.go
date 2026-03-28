@@ -92,72 +92,58 @@ func hasClassIdents(t *testing.T, result RenameResult, module string, names []st
 	return matched
 }
 
-func TestGenUniqName(t *testing.T) {
-	env := &RenameEnv{}
-
-	tests := []struct {
-		expected string
-	}{
-		{"V0"},
-		{"V1"},
-		{"V2"},
-		{"V3"},
-		{"V4"},
-	}
-
-	for _, tt := range tests {
-		result := env.GenUniqName()
-		if result != tt.expected {
-			t.Errorf("GenUniqName() = %s, want %s", result, tt.expected)
-		}
-	}
-}
-
-func TestIntern(t *testing.T) {
+func TestInternTerm(t *testing.T) {
 	global := EffectiveRange{global: true}
 	env := &RenameEnv{}
 
-	// First call should generate V0
-	result1 := env.Intern("foo", "Main", global)
-	if result1 != "V0" {
-		t.Errorf("First Intern('foo', 'Main', global) = %s, want V0", result1)
+	r1 := env.InternTerm("foo", "Main", global)
+	if r1 != "V0" {
+		t.Errorf("InternTerm('foo', 'Main', global) = %s, want V0", r1)
+	}
+	r2 := env.InternTerm("foo", "Main", global)
+	if r2 != "V0" {
+		t.Errorf("InternTerm('foo', 'Main', global) second call = %s, want V0", r2)
+	}
+	r3 := env.InternTerm("bar", "Main", global)
+	if r3 != "V1" {
+		t.Errorf("InternTerm('bar', 'Main', global) = %s, want V1", r3)
+	}
+	r4 := env.InternTerm("foo", "Other", global)
+	if r4 != "V2" {
+		t.Errorf("InternTerm('foo', 'Other', global) = %s, want V2", r4)
+	}
+	r5 := env.InternTerm("foo", "Main", global)
+	if r5 != "V0" {
+		t.Errorf("InternTerm('foo', 'Main', global) third call = %s, want V0", r5)
 	}
 
-	// Second call with same symbol, module, and effectiveRange should return same name
-	result2 := env.Intern("foo", "Main", global)
-	if result2 != "V0" {
-		t.Errorf("Second Intern('foo', 'Main', global) = %s, want V0", result2)
-	}
-
-	// Different symbol in same module should get new name
-	result3 := env.Intern("bar", "Main", global)
-	if result3 != "V1" {
-		t.Errorf("Intern('bar', 'Main', global) = %s, want V1", result3)
-	}
-
-	// Same symbol in different module should get new name
-	result4 := env.Intern("foo", "Other", global)
-	if result4 != "V2" {
-		t.Errorf("Intern('foo', 'Other', global) = %s, want V2", result4)
-	}
-
-	// Verify the first one still returns the same name
-	result5 := env.Intern("foo", "Main", global)
-	if result5 != "V0" {
-		t.Errorf("Third Intern('foo', 'Main', global) = %s, want V0", result5)
-	}
-
-	// Same symbol and module but different effectiveRange should get a new name
 	local := EffectiveRange{global: false, ranges: []parser.Loc{parser.NewLoc(1, 1, 5, 10)}}
-	result6 := env.Intern("foo", "Main", local)
-	if result6 == "V0" {
-		t.Errorf("Intern('foo', 'Main', local) should differ from global intern, got V0")
+	r6 := env.InternTerm("foo", "Main", local)
+	if r6 == "V0" {
+		t.Errorf("InternTerm('foo', 'Main', local) should differ from global, got V0")
 	}
+	r7 := env.InternTerm("foo", "Main", local)
+	if r7 != r6 {
+		t.Errorf("InternTerm('foo', 'Main', local) second call = %s, want %s", r7, r6)
+	}
+}
 
-	// Same local effectiveRange should return the same name
-	result7 := env.Intern("foo", "Main", local)
-	if result7 != result6 {
-		t.Errorf("Intern('foo', 'Main', local) second call = %s, want %s", result7, result6)
+func TestInternTypeSeparateCounters(t *testing.T) {
+	env := &RenameEnv{}
+	global := EffectiveRange{global: true}
+
+	term := env.InternTerm("Foo", "Main", global)
+	ty := env.InternType("Foo", "Main", global)
+	cls := env.InternClass("Foo", "Main", global)
+
+	if term != "V0" {
+		t.Errorf("InternTerm = %s, want V0", term)
+	}
+	if ty != "t0" {
+		t.Errorf("InternType = %s, want t0", ty)
+	}
+	if cls != "c0" {
+		t.Errorf("InternClass = %s, want c0", cls)
 	}
 }
 

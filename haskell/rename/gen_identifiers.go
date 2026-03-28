@@ -90,44 +90,65 @@ type internEntry struct {
 	name   string
 }
 
-// RenameEnv holds the environment for identifier renaming and analysis
-type RenameEnv struct {
-	counter       int
-	internedNames map[string][]internEntry // module -> list of interned entries
+// internTable is a per-namespace intern table with its own counter and prefix
+type internTable struct {
+	counter int
+	prefix  string
+	entries map[string][]internEntry // module -> list of interned entries
 }
 
-// GenUniqName generates a unique internal name by combining "V" with the current counter value,
-// then increments the counter for the next call
-func (env *RenameEnv) GenUniqName() string {
-	name := fmt.Sprintf("V%d", env.counter)
-	env.counter++
-	return name
-}
-
-// Intern returns the internal name for a symbol in a given module and effectiveRange.
-// Two names are interned to the same symbol only if they share the same module and effectiveRange.
-// If already interned, returns the existing internal name; otherwise generates a new unique name.
-func (env *RenameEnv) Intern(symbolName string, moduleName string, er EffectiveRange) string {
-	// Initialize the map if needed
-	if env.internedNames == nil {
-		env.internedNames = make(map[string][]internEntry)
+func newInternTable(prefix string) internTable {
+	return internTable{
+		prefix:  prefix,
+		entries: make(map[string][]internEntry),
 	}
+}
 
-	// Search for an existing entry with matching symbol and effectiveRange
-	for _, entry := range env.internedNames[moduleName] {
+func (t *internTable) intern(symbolName string, moduleName string, er EffectiveRange) string {
+	for _, entry := range t.entries[moduleName] {
 		if entry.symbol == symbolName && entry.er.Equal(er) {
 			return entry.name
 		}
 	}
-
-	// Generate new unique name and store it
-	internalName := env.GenUniqName()
-	env.internedNames[moduleName] = append(env.internedNames[moduleName], internEntry{
+	name := fmt.Sprintf("%s%d", t.prefix, t.counter)
+	t.counter++
+	t.entries[moduleName] = append(t.entries[moduleName], internEntry{
 		symbol: symbolName,
 		er:     er,
-		name:   internalName,
+		name:   name,
 	})
-	return internalName
+	return name
+}
+
+// RenameEnv holds the environment for identifier renaming and analysis
+type RenameEnv struct {
+	terms   internTable
+	types   internTable
+	classes internTable
+}
+
+// InternTerm interns a term-level name, producing identifiers like V0, V1, V2...
+func (env *RenameEnv) InternTerm(symbolName string, moduleName string, er EffectiveRange) string {
+	if env.terms.entries == nil {
+		env.terms = newInternTable("V")
+	}
+	return env.terms.intern(symbolName, moduleName, er)
+}
+
+// InternType interns a type-level name, producing identifiers like t0, t1, t2...
+func (env *RenameEnv) InternType(symbolName string, moduleName string, er EffectiveRange) string {
+	if env.types.entries == nil {
+		env.types = newInternTable("t")
+	}
+	return env.types.intern(symbolName, moduleName, er)
+}
+
+// InternClass interns a class name, producing identifiers like c0, c1, c2...
+func (env *RenameEnv) InternClass(symbolName string, moduleName string, er EffectiveRange) string {
+	if env.classes.entries == nil {
+		env.classes = newInternTable("c")
+	}
+	return env.classes.intern(symbolName, moduleName, er)
 }
 
 // namesFromPat extracts all names and their node IDs from a pattern
@@ -219,7 +240,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 		}
 
 		for _, name := range node.Names {
-			internalName := env.Intern(name, moduleName, effectiveRange)
+			internalName := env.InternTerm(name, moduleName, effectiveRange)
 			termId := TermIdentifier{
 				Identifier: Identifier{
 					name:           name,
@@ -282,7 +303,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 				isParam = true
 			}
 
-			internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
+			internalName := env.InternTerm(nameInfo.name, moduleName, effectiveRange)
 			termId := TermIdentifier{
 				Identifier: Identifier{
 					name:           nameInfo.name,
@@ -298,7 +319,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 
 	case *parser.DataCon:
 		// Data constructors are always global terms
-		internalName := env.Intern(node.Name, moduleName, EffectiveRange{global: true})
+		internalName := env.InternTerm(node.Name, moduleName, EffectiveRange{global: true})
 		termId := TermIdentifier{
 			Identifier: Identifier{
 				name:   node.Name,
@@ -317,7 +338,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.DataDecl:
 		// Data type declarations - extract type name from DeclHead
 		dHead := node.DHead
-		internalName := env.Intern(dHead.Name, moduleName, EffectiveRange{global: true})
+		internalName := env.InternType(dHead.Name, moduleName, EffectiveRange{global: true})
 		typeId := TypeIdentifier{
 			Identifier: Identifier{
 				name:   dHead.Name,
@@ -336,7 +357,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.TypeDecl:
 		// Type declarations - extract type name from DeclHead
 		dHead := node.DHead
-		internalName := env.Intern(dHead.Name, moduleName, EffectiveRange{global: true})
+		internalName := env.InternType(dHead.Name, moduleName, EffectiveRange{global: true})
 		typeId := TypeIdentifier{
 			Identifier: Identifier{
 				name:   dHead.Name,
@@ -355,7 +376,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 	case *parser.ClassDecl:
 		// Class declarations - extract class name from DeclHead
 		dHead := node.DHead
-		internalName := env.Intern(dHead.Name, moduleName, EffectiveRange{global: true})
+		internalName := env.InternClass(dHead.Name, moduleName, EffectiveRange{global: true})
 		classId := ClassIdentifier{
 			Identifier: Identifier{
 				name:   dHead.Name,
@@ -381,7 +402,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			}
 
 			for _, nameInfo := range names {
-				internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
+				internalName := env.InternTerm(nameInfo.name, moduleName, effectiveRange)
 				termId := TermIdentifier{
 					Identifier: Identifier{
 						name:           nameInfo.name,
@@ -407,7 +428,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 			if gen, ok := stmt.(*parser.Generator); ok {
 				names := namesFromPat(gen.Pat)
 				for _, nameInfo := range names {
-					internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
+					internalName := env.InternTerm(nameInfo.name, moduleName, effectiveRange)
 					termId := TermIdentifier{
 						Identifier: Identifier{
 							name:           nameInfo.name,
@@ -433,7 +454,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 		for _, pat := range node.Pats {
 			names := namesFromPat(pat)
 			for _, nameInfo := range names {
-				internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
+				internalName := env.InternTerm(nameInfo.name, moduleName, effectiveRange)
 				termId := TermIdentifier{
 					Identifier: Identifier{
 						name:           nameInfo.name,
@@ -457,7 +478,7 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 		}
 
 		for _, nameInfo := range names {
-			internalName := env.Intern(nameInfo.name, moduleName, effectiveRange)
+			internalName := env.InternTerm(nameInfo.name, moduleName, effectiveRange)
 			termId := TermIdentifier{
 				Identifier: Identifier{
 					name:           nameInfo.name,
