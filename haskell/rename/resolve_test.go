@@ -65,6 +65,7 @@ func TestResolveExpVar(t *testing.T) {
 			}
 			return 0
 		},
+		nil,
 		0,
 	)
 	visitor.Visit(moduleAST, nil)
@@ -183,6 +184,7 @@ func TestResolveExpVarToInternalName(t *testing.T) {
 			}
 			return 0
 		},
+		nil,
 		0,
 	)
 	visitor.Visit(moduleAST, nil)

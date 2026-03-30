@@ -207,6 +207,7 @@ func (env *RenameEnv) GenIdentifiers(ast parser.Module) RenameResult {
 			env.visitNode(ast, moduleName, result, parent)
 			return 0
 		},
+		nil,
 		0,
 	)
 	visitor.Visit(&ast, nil)
@@ -496,8 +497,10 @@ func (env *RenameEnv) visitNode(ast parser.AST, moduleName string, result *Renam
 
 // RenameDecl traverses all nodes in module and sets Canonical on any node
 // whose ID appears in the declaredAt list of an identifier in result.
+// Only identifiers belonging to this module are considered, since node IDs
+// are not globally unique across modules.
 func RenameDecl(module *parser.Module, result RenameResult) {
-	// Build a map from node ID to internalName
+	// Build a map from node ID to internalName, scoped to this module
 	declaredAtMap := make(map[int]string)
 
 	for _, term := range result.Terms {
@@ -529,6 +532,7 @@ func RenameDecl(module *parser.Module, result RenameResult) {
 			}
 			return 0
 		},
+		nil,
 		0,
 	)
 	traverser.Visit(module, nil)
@@ -574,6 +578,7 @@ func RenameTypeDecl(module *parser.Module, result RenameResult) {
 			typeSig.Canonicals = canonicals
 			return 0
 		},
+		nil,
 		0,
 	)
 	traverser.Visit(module, nil)

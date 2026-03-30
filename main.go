@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"github.com/urfave/cli/v3"
+	"goanna/haskell/meta"
 	"goanna/haskell/parser"
 	"goanna/haskell/rename"
 )
@@ -35,13 +37,11 @@ func printASTCommand(ctx context.Context, cmd *cli.Command) error {
 	return parser.PrintASTFromFile(filePath)
 }
 
-func renameCommand(ctx context.Context, cmd *cli.Command) error {
-	if cmd.Args().Len() < 1 {
-		return fmt.Errorf("usage: rename <dir>")
-	}
-	dir := cmd.Args().Get(0)
-
+// parseAndRename walks dir for *.hs files, parses them with a shared node ID
+// counter (ensuring globally unique IDs), and renames all identifiers.
+func parseAndRename(dir string) ([]*parser.Module, error) {
 	var modules []*parser.Module
+	counter := 0
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -52,7 +52,7 @@ func renameCommand(ctx context.Context, cmd *cli.Command) error {
 				return err
 			}
 			moduleName := parser.GuessModuleName(path, dir)
-			m := parser.Parse(code, moduleName)
+			m := parser.ParseWithCounter(code, moduleName, &counter)
 			if m != nil {
 				modules = append(modules, m)
 			}
@@ -60,16 +60,49 @@ func renameCommand(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	})
 	if err != nil {
+		return nil, err
+	}
+	rename.RenameAll(modules)
+	return modules, nil
+}
+
+func renameCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: rename <dir>")
+	}
+	modules, err := parseAndRename(cmd.Args().Get(0))
+	if err != nil {
 		return err
 	}
-
-	rename.RenameAll(modules)
-
 	for _, m := range modules {
 		fmt.Printf("\n======== %s ========\n\n", m.Name)
 		parser.PrintASTWithCanonicals(m)
 	}
 	return nil
+}
+
+func declsCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: decls <dir>")
+	}
+	modules, err := parseAndRename(cmd.Args().Get(0))
+	if err != nil {
+		return err
+	}
+
+	graph := meta.GetDeclGraph(modules)
+
+	keys := make([]string, 0, len(graph))
+	for k := range graph {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		deps := graph[k]
+		fmt.Printf("%s -> [%s]\n", k, strings.Join(deps, ", "))
+	}
+  return nil
 }
 
 func main() {
@@ -100,6 +133,12 @@ func main() {
 				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print all module ASTs with canonicals",
 				ArgsUsage: "<dir>",
 				Action:    renameCommand,
+			},
+			{
+				Name:      "decls",
+				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print the declaration dependency graph",
+				ArgsUsage: "<dir>",
+				Action:    declsCommand,
 			},
 		},
 	}

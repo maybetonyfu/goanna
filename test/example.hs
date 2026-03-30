@@ -1,9 +1,4 @@
 module Main where
 
-import Test
 
-data Int
-
-y :: Int
-y = Test.x
-
+x = let y = (let z = 3 in z) in y

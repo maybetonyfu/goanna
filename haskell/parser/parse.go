@@ -140,11 +140,22 @@ func (pe parseEnv) assoc(sym string) string {
 }
 
 // Parse parses Haskell code and returns the AST as a Module
+// ParseWithCounter parses Haskell source using the given shared node ID counter,
+// so that multiple modules can have globally unique node IDs.
+func ParseWithCounter(code []byte, altname string, counter *int) *Module {
+	return parseWithCounter(code, altname, counter)
+}
+
 func Parse(code []byte, altname string) *Module {
 	return parse(code, altname)
 }
 
 func parse(code []byte, altname string) *Module {
+	initialCounter := 0
+	return parseWithCounter(code, altname, &initialCounter)
+}
+
+func parseWithCounter(code []byte, altname string, counter *int) *Module {
 	parser := treesitter.NewParser()
 	defer parser.Close()
 	parser.SetLanguage(treesitter.NewLanguage(treesitterhaskell.Language()))
@@ -152,9 +163,8 @@ func parse(code []byte, altname string) *Module {
 	tree := parser.Parse(code, nil)
 	root := tree.RootNode()
 	cursor := root.Walk()
-	initialCounter := 0
 	pe := parseEnv{
-		counter:       &initialCounter,
+		counter:       counter,
 		source:        code,
 		cursor:        cursor,
 		fixity:        fixity,

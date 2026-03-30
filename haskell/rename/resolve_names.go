@@ -12,6 +12,7 @@ func Resolve(module *parser.Module, result RenameResult, importMap map[string][]
 			resolveNode(ast, module.Name, result, importMap)
 			return 0
 		},
+		nil,
 		0,
 	)
 	visitor.Visit(module, nil)
