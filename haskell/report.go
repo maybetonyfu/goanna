@@ -81,7 +81,7 @@ func createSnapshot(criticalNodes []int, mcsNodes []int, nodeRange map[int]inven
 	lines := make([]Line, 0)
 	for lineNum, line := range strings.Split(file, "\n") {
 
-		if lineHasNode[lineNum] == nil || len(lineHasNode[lineNum]) == 0 {
+		if len(lineHasNode[lineNum]) == 0 {
 			continue
 		}
 

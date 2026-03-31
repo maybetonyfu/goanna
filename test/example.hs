@@ -1,8 +1,4 @@
 module Main where
 
 
-x :: a -> a
-x a = a
-
-y :: (Eq a) => a -> a
-y a = a
+x a = let y = b in (a, b)

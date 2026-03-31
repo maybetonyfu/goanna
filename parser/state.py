@@ -171,9 +171,6 @@ class State(BaseModel):
         rule.id = rule.node_id
         self.rules.append(rule)
 
-    def max_level(self) -> int:
-        return self.max_depth
-
     def is_parent_of(self, parent: str, child: str) -> bool:
         if child not in self.closures:
             return False

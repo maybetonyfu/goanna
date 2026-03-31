@@ -11,12 +11,6 @@ class GlobalState:
     def add_rule(self, rule: Rule) -> None:
         raise NotImplementedError
 
-    def node_level(self, node_id: int) -> int:
-        raise NotImplementedError
-
-    def max_level(self) -> int:
-        raise NotImplementedError
-
     def is_parent_of(self, parent: str, child: str) -> bool:
         raise NotImplementedError
 
@@ -56,7 +50,7 @@ class ConstraintGenState:
     def head_of_instance_rule(self, name: str, instance_id: int) -> RuleHead:
         return RuleHead(type='instance', name=name, id=instance_id, module=self.module)
 
-    def type_of(self, name: str, var: LVar, head: RuleHead) -> list[LStruct]:
+    def type_of(self, name: str, var: LVar, head: RuleHead) -> list[LTerm]:
         collector = self.fresh()
         self.global_state.add_class_var(head.name, collector.value)
         if self.global_state.is_parent_of(head.name, name):

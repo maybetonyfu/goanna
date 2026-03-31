@@ -105,6 +105,55 @@ func declsCommand(ctx context.Context, cmd *cli.Command) error {
   return nil
 }
 
+func typeVarClassesCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: typevarclasses <dir>")
+	}
+	modules, err := parseAndRename(cmd.Args().Get(0))
+	if err != nil {
+		return err
+	}
+
+	superclasses := meta.GetClassSuperclasses(modules)
+	tvClasses := meta.GetTypeVarClasses(modules, superclasses)
+
+	keys := make([]string, 0, len(tvClasses))
+	for k := range tvClasses {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		vals := tvClasses[k]
+		sort.Strings(vals)
+		fmt.Printf("%s -> [%s]\n", k, strings.Join(vals, ", "))
+	}
+	return nil
+}
+
+func typeVarsCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: typevars <dir>")
+	}
+	modules, err := parseAndRename(cmd.Args().Get(0))
+	if err != nil {
+		return err
+	}
+
+	declTypeVars := meta.GetDeclTypeVars(modules)
+
+	keys := make([]string, 0, len(declTypeVars))
+	for k := range declTypeVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		fmt.Printf("%s -> [%s]\n", k, strings.Join(declTypeVars[k], ", "))
+	}
+	return nil
+}
+
 func classesCommand(ctx context.Context, cmd *cli.Command) error {
 	if cmd.Args().Len() < 1 {
 		return fmt.Errorf("usage: classes <dir>")
@@ -199,6 +248,18 @@ func main() {
 				Usage:     "Parse all *.hs files in a directory and print each typeclass with all its superclasses (transitive)",
 				ArgsUsage: "<dir>",
 				Action:    classesCommand,
+			},
+			{
+				Name:      "typevars",
+				Usage:     "Parse all *.hs files in a directory and print the type variables for each declaration",
+				ArgsUsage: "<dir>",
+				Action:    typeVarsCommand,
+			},
+			{
+				Name:      "typevarclasses",
+				Usage:     "Parse all *.hs files in a directory and print the typeclass constraints for each type variable (with superclasses)",
+				ArgsUsage: "<dir>",
+				Action:    typeVarClassesCommand,
 			},
 		},
 	}

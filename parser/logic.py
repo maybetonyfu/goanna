@@ -46,12 +46,12 @@ GammaVar_ = LVar(value="Gamma_")
 ZetaVar = LVar(value="Zeta")
 ZetaVar_ = LVar(value="Zeta_")
 Classes = LVar(value="Classes")
+wildcard = LVar(value="_")
 
-# Special terms
+# Special Atomes
 succeed = LAtom(value="true")
 fail = LAtom(value="false")
 nil = LAtom(value="nil")
-wildcard = LVar(value="_")
 cut = LAtom(value="!")
 
 

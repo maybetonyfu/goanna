@@ -57,7 +57,7 @@ func (p *Printer) getOrCreateVarName(lookupName string, preferSameName bool) str
 			tmpl:           fmt.Sprintf("{{ $.%s }}", lookupName),
 			skolem:         false,
 			preferredName:  "",
-			appearedInJobs: mapset.NewSet[int](p.currentJob),
+			appearedInJobs: mapset.NewSet(p.currentJob),
 			typeClasses:    mapset.NewSet[string](),
 			friendlyName:   "",
 		}
@@ -87,13 +87,12 @@ func makePair(term prolog_tool.Term) Pair {
 		}
 		firstArg := typedTerm.Args[0]
 		secondArg := typedTerm.Args[1]
-		switch firstArg.(type) {
+		switch arg := firstArg.(type) {
 		case prolog_tool.Compound:
 			return Pair{adt, firstArg, secondArg}
 
 		case prolog_tool.Atom:
-			firstArgC := firstArg.(prolog_tool.Atom)
-			if firstArgC.Value == "list" {
+			if arg.Value == "list" {
 				return Pair{list, secondArg, nil}
 			}
 
@@ -235,15 +234,15 @@ func (p *Printer) printCompound(term prolog_tool.Compound) string {
 }
 
 func (p *Printer) PrintTerm(term prolog_tool.Term) string {
-	switch term.(type) {
+	switch t := term.(type) {
 	case prolog_tool.Atom:
-		return p.printAtom(term.(prolog_tool.Atom))
+		return p.printAtom(t)
 
 	case prolog_tool.Var:
-		return p.printVar(term.(prolog_tool.Var))
+		return p.printVar(t)
 
 	case prolog_tool.Compound:
-		return p.printCompound(term.(prolog_tool.Compound))
+		return p.printCompound(t)
 
 	default:
 		panic("Unknown term type")
