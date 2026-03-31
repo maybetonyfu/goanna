@@ -118,32 +118,32 @@ member1(L,[L|_]) :- !.
 member1(L,[_|RS]) :- member1(L,RS).
 
 test_class([with(Class, Instance)|XS]) :-
-    nonvar(Class), !,
-    call(Class, Instance),
-    test_class(XS).
+		nonvar(Class), !,
+		call(Class, Instance),
+		test_class(XS).
 test_class(_).
 
 cons(T, _, _, _, _, _) :-
-    T = pair(function(A), B),
-    B = pair(function(C), D),
-    C = pair(list, A),
-    D = pair(list, A).
+		T = pair(function(A), B),
+		B = pair(function(C), D),
+		C = pair(list, A),
+		D = pair(list, A).
 
 m0_x(_, Calls, _, _, _, _) :- member1(m0_x, Calls), !.
 m0_x(T, Calls, Gamma, Zeta, _, Classes) :-
-    Calls_ = [m0_x | Calls],
-    eq(T, _2),                                                                                    
-    eq(T, _5),                                                                                    
-    eq(_5, _4),                                                                                    
-    true.
+		Calls_ = [m0_x | Calls],
+		eq(T, _2),
+		eq(T, _5),
+		eq(_5, _4),
+		true.
 
 
 type_check :-
-    once((
-        m0_x(_, [], _, _, [], C_m0_x)
-        )),
-    test_class(C_m0_x),
-    true.
+		once((
+				m0_x(_, [], _, _, [], C_m0_x)
+				)),
+		test_class(C_m0_x),
+		true.
 
 `
 	p.Consult(program)

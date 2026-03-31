@@ -105,6 +105,54 @@ func declsCommand(ctx context.Context, cmd *cli.Command) error {
   return nil
 }
 
+func classesCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: classes <dir>")
+	}
+	modules, err := parseAndRename(cmd.Args().Get(0))
+	if err != nil {
+		return err
+	}
+
+	superclasses := meta.GetClassSuperclasses(modules)
+
+	keys := make([]string, 0, len(superclasses))
+	for k := range superclasses {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		fmt.Printf("%s -> [%s]\n", k, strings.Join(superclasses[k], ", "))
+	}
+	return nil
+}
+
+func paramsCommand(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() < 1 {
+		return fmt.Errorf("usage: params <dir>")
+	}
+	modules, err := parseAndRename(cmd.Args().Get(0))
+	if err != nil {
+		return err
+	}
+
+	params := meta.GetDeclParams(modules)
+	graph := meta.GetDeclGraph(modules)
+	inherited := meta.InheritParams(params, graph)
+
+	keys := make([]string, 0, len(inherited))
+	for k := range inherited {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		fmt.Printf("%s -> [%s]\n", k, strings.Join(inherited[k], ", "))
+	}
+	return nil
+}
+
 func main() {
 	cmd := &cli.Command{
 		Name:  "goanna",
@@ -139,6 +187,18 @@ func main() {
 				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print the declaration dependency graph",
 				ArgsUsage: "<dir>",
 				Action:    declsCommand,
+			},
+			{
+				Name:      "params",
+				Usage:     "Parse all *.hs files in a directory, rename identifiers, and print parameters for each declaration",
+				ArgsUsage: "<dir>",
+				Action:    paramsCommand,
+			},
+			{
+				Name:      "classes",
+				Usage:     "Parse all *.hs files in a directory and print each typeclass with all its superclasses (transitive)",
+				ArgsUsage: "<dir>",
+				Action:    classesCommand,
 			},
 		},
 	}

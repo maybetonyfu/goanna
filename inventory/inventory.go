@@ -57,12 +57,16 @@ type Input struct {
 	TypeVars      map[string]map[string][]string `json:"type_vars"`
 	Arguments     map[string][]string            `json:"arguments"`
 	NodeDepth     map[int]int                    `json:"node_depth"`
+	// May not need Node Depth if omitting generalizaion
 	Classes       map[string][]string            `json:"classes"`
 	NodeTable     []NodePair                     `json:"node_graph"`
+	// May not need node tables if we don't do generalize
 	MaxLevel      int                            `json:"max_depth"`
+	// May not need max level if we do not generalize
 	NodeRange     map[int]Range                  `json:"node_range,"`
 	TopLevels     []string                       `json:"top_levels"`
 	Collectors    map[string][]string            `json:"collectors"`
+	// Collectors may not be necessary here. It is always {Var1: ["_Classes"], ...}
 }
 
 type Inventory struct {

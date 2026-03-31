@@ -1,4 +1,8 @@
 module Main where
 
 
-x = let y = (let z = 3 in z) in y
+x :: a -> a
+x a = a
+
+y :: (Eq a) => a -> a
+y a = a

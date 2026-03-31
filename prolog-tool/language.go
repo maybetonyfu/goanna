@@ -37,8 +37,8 @@ func (List) term()     {}
 func (Compound) term() {}
 
 var termLexer = lexer.MustSimple([]lexer.SimpleRule{
-	{"Atom", `[a-z]+[a-zA-Z_0-9]*`},
-	{"Var", `[A-Z_][a-zA-Z_0-9]*`},
+	{Name: "Atom", Pattern: `[a-z]+[a-zA-Z_0-9]*`},
+	{Name: "Var",  Pattern: `[A-Z_][a-zA-Z_0-9]*`},
 	{Name: "Punct", Pattern: `[-[!@#$%^&*()+={}\|:;"'<,>.?/]|]`},
 })
 

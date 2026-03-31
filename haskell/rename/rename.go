@@ -19,4 +19,5 @@ func RenameAll(modules []*parser.Module) {
 	}
 
 	ResolveAll(modules, result)
+	RenameTypeVars(modules)
 }
